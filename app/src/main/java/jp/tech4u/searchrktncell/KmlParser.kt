@@ -26,7 +26,8 @@ class KmlParser {
 
     val placemarks = mutableListOf<Placemark>()
     val kmlStyleMap = mutableMapOf<String, KmlStyle>()
-    var markerList = mutableListOf<Marker>()
+    var markerList = mutableListOf<Marker>() // 全削除処理用
+    var markerMapByEcis = mutableMapOf<String, Marker>() // 重複チェック用
     val eciMap = mutableMapOf<Long, Placemark>()
     lateinit var extDir: Path
 
@@ -54,11 +55,29 @@ class KmlParser {
         var scale: Float?
     )
 
+    fun clearMarkers() {
+        try {
+            for (marker in markerList) {
+                marker.remove()
+            }
+        }
+        catch (e:Exception){
+            // 裏スレッドでやると例外がでる。
+            // （実際、リロード時にでるが、その後でもう一回ちゃんと呼ぶので大丈夫）
+            Log.e(TAG,"clearMarkers() "+e.message)
+        }
+        markerList.clear()
+        markerMapByEcis.clear()
+    }
+
     fun clear() {
+        clearMarkers()
+
         placemarks.clear()
         kmlStyleMap.clear()
         kmlStyleMapMap.clear()
         eciMap.clear()
+        eciDefined = false
 
         name = ""
         description = ""
@@ -283,7 +302,6 @@ class KmlParser {
                 "styleUrl" -> styleUrl = readTag(parser, "styleUrl")
                 "Point" -> ll = readPoint(parser)
                 "address" -> ll = readAddress(parser)
-                "ExtendedData" -> eciMutableList = readExtendedData(parser)
                 else -> skip(parser)
             }
         }
@@ -304,42 +322,6 @@ class KmlParser {
 
         styleUrl = styleUrl.substring(1)   // 先頭の#を取る
         return Placemark(name, description, styleUrl, ll, eciList, EciUtil.getEnbLcid(eciList))
-    }
-
-    @Throws(IOException::class, XmlPullParserException::class)
-    private fun readExtendedData(parser: XmlPullParser): MutableList<Long> {
-        // 参考: https://twitter.com/nullpon44011/status/1353901694015311872
-        var b3enb = ""
-        var b3ci = ""
-        parser.require(XmlPullParser.START_TAG, ns, "ExtendedData")
-        while (parser.next() != XmlPullParser.END_TAG) {
-            if (parser.eventType != XmlPullParser.START_TAG) continue
-            when (parser.name) {
-                "Data" -> {
-                    val name = parser.getAttributeValue(null, "name")
-                    val value = readChildTag(parser, "value")
-                    if (name == "B3 eNB") {
-                        b3enb = value
-                    } else if (name == "B3 CI") {
-                        b3ci = value
-                    }
-                }
-                else -> skip(parser)
-            }
-        }
-        parser.require(XmlPullParser.END_TAG, ns, "ExtendedData")
-
-        val eciList = mutableListOf<Long>()
-        if (b3enb != "" && b3ci != "") {
-            val enb = b3enb.toFloat().toLong()  // 小数点がついている場合があるので、一旦floatにしています
-            val ciAry = b3ci.split('/')
-            for (ciStr in ciAry) {
-                val ci = ciStr.toInt()
-                val eci = enb * 256 + ci
-                eciList.add(eci)
-            }
-        }
-        return eciList
     }
 
     @Throws(IOException::class, XmlPullParserException::class)

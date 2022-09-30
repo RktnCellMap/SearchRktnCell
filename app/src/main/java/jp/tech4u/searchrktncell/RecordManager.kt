@@ -31,13 +31,34 @@ class RecordManager {
 
     private val distanceResult = FloatArray(3)
 
+    var bPlotPartner = true
+    var bPlotMyMapCell = true
+    private var excludeTacList = mutableListOf<Int>()
+
+    fun setExcludeTac(excludeTac:String){
+        excludeTacList.clear()
+        val ary = excludeTac.split(',')
+        for(tac in ary) {
+            try {
+                excludeTacList.add(tac.toInt())
+            }
+            catch(e:Exception){}
+        }
+    }
+
     fun readLog(file: File) {
         Utils.readLog(file, logList)
     }
 
     fun clearMarkers() {
-        for (marker in markerList) {
-            marker.remove()
+        try {
+            for (marker in markerList) {
+                marker.remove()
+            }
+        }
+        catch (e:Exception){
+            // 裏スレッドでやると例外がでる。
+            Log.e(TAG,"clearMarkers() "+e.message)
         }
         markerList.clear()
     }
@@ -47,50 +68,56 @@ class RecordManager {
             return
         }
         clearMarkers()
-        val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
-        val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
-        plotAll(mMap, CellId(logList.last().ci), bPlotPartner, bPlotMyMapCell)
+        plotAll(mMap, CellId(logList.last().ci))
+    }
+
+    fun isExcludeTac(tac:Int) :Boolean {
+        return excludeTacList.contains(tac)
     }
 
     // プロットするかの判定
     // MyMap登録済みかの判定。パートナーエリアは無関係
-    private fun needPlotM(logVO: LogVO, bPlotMyMapCell: Boolean): Boolean {
-        if (bPlotMyMapCell) return true    // 設定で全プロットすることになってる
-        val app = MyApplication.getInstance()
-        val name = app.myMapManager.getName(logVO.ci)
-        if (name == null || name == "") return true // マイマップになし→プロットする。
-        return name.endsWith('？')  // マイマップ上の名前の最後が？ならプロットする。そうでなければしない。
+    private fun needPlotM(logVO: LogVO): Boolean {
+        if (bPlotPartner || logVO.mncString == "11") {
+            if (isExcludeTac(logVO.tac)) return false    // 除外TACに含まれていたらプロットしない
+            if (bPlotMyMapCell) return true    // マイマップ有無にかかわらずプロットする
+
+            // TODO 結果をキャッシュする
+            val app = MyApplication.getInstance()
+            val name = app.myMapManager.getName(logVO.ci)
+            if (name == null || name == "") return true // マイマップになし→プロットする。
+            return name.endsWith('？')  // マイマップ上の名前の最後が？ならプロットする。そうでなければしない。
+        }
+        else {
+            return false
+        }
     }
 
-    fun plotAll(mMap: GoogleMap, ci: CellId, bPlotPartner: Boolean, bPlotMyMapCell: Boolean) {
+    fun plotAll(mMap: GoogleMap, ci: CellId) {
         nowCi = ci
 
         for (logVO in logList) {
-            if (bPlotPartner || logVO.mncString == "11") {
-                if (needPlotM(logVO, bPlotMyMapCell)) {
-                    val lci = CellId(logVO.ci)
-                    val bEqualBs = nowCi.equalBs(lci)
-                    plot(mMap, logVO, lci, bEqualBs)
-                }
+            if (needPlotM(logVO)) {
+                val lci = CellId(logVO.ci)
+                val bEqualBs = nowCi.equalBs(lci)
+                plot(mMap, logVO, lci, bEqualBs)
             }
         }
     }
 
-    fun plotAndLog(mMap: GoogleMap, logVO: LogVO, bPlotPartner: Boolean, bPlotMyMapCell: Boolean) {
+    fun plotAndLog(mMap: GoogleMap, logVO: LogVO) {
         val ci = CellId(logVO.ci)
         val bEqualBs = nowCi.equalBs(ci)
 
         if (bEqualBs) {
-            if (bPlotPartner || logVO.mncString == "11") {
-                if (needPlotM(logVO, bPlotMyMapCell)) {
-                    plot(mMap, logVO, ci, bEqualBs)
-                }
-                logList.add(logVO)
+            if (needPlotM(logVO)) {
+                plot(mMap, logVO, ci, bEqualBs)
             }
+            logList.add(logVO)
         } else {
             clearMarkers()
             logList.add(logVO)
-            plotAll(mMap, ci, bPlotPartner, bPlotMyMapCell)
+            plotAll(mMap, ci)
         }
     }
 
@@ -146,17 +173,17 @@ class RecordManager {
 
         val icon = BitmapDescriptorFactory.fromBitmap(createBitmap(logVO.rsrp, ci.sector3, logVO.ta, bEqualBs))
 
-        val title = "${ci.eNB}-${ci.sector}"
-            val snippet = "RSRP:${logVO.rsrp} TA:${logVO.taStr()}"
-            val taForZ = if (logVO.ta < 2000) logVO.ta else 1999
+        val title = "${logVO.tac} 　${ci.eNB}-${ci.sector}"
+        val snippet = "RSRP:${logVO.rsrp} TA:${logVO.taStr()}"
+        val taForZ = if (logVO.ta < 2000) logVO.ta else 1999
         val markerOptions = MarkerOptions()
             .position(latlng)
             .anchor(0.5f, 0.5f)
             .title(title)
-                .snippet(snippet)
+            .snippet(snippet)
             .icon(icon)
             .alpha(0.8f)
-                .zIndex((if (bEqualBs) 3999f else 1999f) - taForZ)
+            .zIndex((if (bEqualBs) 3999f else 1999f) - taForZ)
         val marker: Marker = mMap.addMarker(markerOptions)
         markerList.add(marker)
     }

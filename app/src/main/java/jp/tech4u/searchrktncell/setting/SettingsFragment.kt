@@ -4,7 +4,11 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.text.InputFilter
+import android.text.InputFilter.LengthFilter
+import android.text.InputType
 import android.text.TextUtils
+import android.widget.EditText
 import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
@@ -29,6 +33,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             bwFromEarfcn?.isVisible = true
         }
 
+        // マイマップのサマリーをカスタマイズする
         val myMapUrlSummaryProvider = Preference.SummaryProvider<EditTextPreference> { preference ->
             try {
                 val mid = Utils.getMyMapMidFromUrl(preference.text)
@@ -36,7 +41,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                     "未設定"
                 } else {
                     val app = MyApplication.getInstance()
-                    val name = app.myMapManager.midNameMap[mid]
+                    val name = app.myMapManager.midAttributeMap[mid]?.name
                     if (TextUtils.isEmpty(name)) {
                         mid
                     } else {
@@ -48,12 +53,21 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 preference.text
             }
         }
-
         findPreference<EditTextPreference>("myMapUrl")?.summaryProvider = myMapUrlSummaryProvider
         findPreference<EditTextPreference>("myMapUrl2")?.summaryProvider = myMapUrlSummaryProvider
         findPreference<EditTextPreference>("myMapUrl3")?.summaryProvider = myMapUrlSummaryProvider
         findPreference<EditTextPreference>("myMapUrl4")?.summaryProvider = myMapUrlSummaryProvider
         findPreference<EditTextPreference>("myMapUrl5")?.summaryProvider = myMapUrlSummaryProvider
+
+        // maxDistance の入力制限
+        val numberPreference: EditTextPreference? = findPreference("maxDistance")
+        numberPreference?.setOnBindEditTextListener { editText ->
+            // 数字入力のみにする
+            editText.inputType = InputType.TYPE_CLASS_NUMBER
+            // 文字数制限
+            editText.selectAll() // select all text
+            editText.filters = arrayOf<InputFilter>(LengthFilter(6))
+        }
     }
 
     private fun getVersionName(context: Context): String {

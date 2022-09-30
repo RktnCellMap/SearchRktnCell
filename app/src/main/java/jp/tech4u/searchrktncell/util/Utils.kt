@@ -196,9 +196,11 @@ object Utils {
     fun getMyMapMid(key:String): String {
         var mid = ""
         try {
-            val myMapUrl = getPreferenceString(key, null)
-            if (myMapUrl != null) {
-                mid = getMyMapMidFromUrl(myMapUrl)
+            if ( getPreferenceBoolean(key+"Enable", true)) {
+                val myMapUrl = getPreferenceString(key, null)
+                if (myMapUrl != null) {
+                    mid = getMyMapMidFromUrl(myMapUrl)
+                }
             }
         } catch (e: Exception) {
             // マイマップURI解析失敗

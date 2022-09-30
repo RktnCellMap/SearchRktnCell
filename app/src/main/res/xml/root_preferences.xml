@@ -19,6 +19,13 @@
             android:defaultValue="true"
     />
 
+    <EditTextPreference
+            app:key="maxDistance"
+            app:title="拡縮で広域にするときの最大距離[m]"
+            android:defaultValue="2000"
+            app:useSimpleSummaryProvider="true"
+    />
+
     <SwitchPreference
             app:key="locationTimer"
             app:title="現在地連動タイマー"
@@ -47,29 +54,67 @@
 
     <EditTextPreference
             app:key="myMapUrl"
-            app:title="GoogleマイマップURL"
+            app:title="Googleマイマップ URL"
             app:useSimpleSummaryProvider="true"
+    />
+    <SwitchPreference
+            app:key="myMapUrlEnable"
+            app:title="Googleマイマップ 有効/無効"
+            android:summaryOn="有効"
+            android:summaryOff="無効"
+            android:defaultValue="true"
     />
 
     <EditTextPreference
             app:key="myMapUrl2"
-            app:title="GoogleマイマップURL2"
+            app:title="Googleマイマップ2 URL"
             app:useSimpleSummaryProvider="true"
     />
+    <SwitchPreference
+            app:key="myMapUrl2Enable"
+            app:title="Googleマイマップ2 有効/無効"
+            android:summaryOn="有効"
+            android:summaryOff="無効"
+            android:defaultValue="true"
+    />
+
     <EditTextPreference
             app:key="myMapUrl3"
-            app:title="GoogleマイマップURL3"
+            app:title="Googleマイマップ3 URL"
             app:useSimpleSummaryProvider="true"
     />
+    <SwitchPreference
+            app:key="myMapUrl3Enable"
+            app:title="Googleマイマップ3 有効/無効"
+            android:summaryOn="有効"
+            android:summaryOff="無効"
+            android:defaultValue="true"
+    />
+
     <EditTextPreference
             app:key="myMapUrl4"
-            app:title="GoogleマイマップURL4"
+            app:title="Googleマイマップ4 URL"
             app:useSimpleSummaryProvider="true"
     />
+    <SwitchPreference
+            app:key="myMapUrl4Enable"
+            app:title="Googleマイマップ4 有効/無効"
+            android:summaryOn="有効"
+            android:summaryOff="無効"
+            android:defaultValue="true"
+    />
+
     <EditTextPreference
             app:key="myMapUrl5"
-            app:title="GoogleマイマップURL5"
+            app:title="Googleマイマップ5 URL"
             app:useSimpleSummaryProvider="true"
+    />
+    <SwitchPreference
+            app:key="myMapUrl5Enable"
+            app:title="Googleマイマップ5 有効/無効"
+            android:summaryOn="有効"
+            android:summaryOff="無効"
+            android:defaultValue="true"
     />
 
     <SwitchPreference
@@ -93,6 +138,12 @@
             android:summaryOn="プロットする"
             android:summaryOff="プロットしない"
             android:defaultValue="false"
+    />
+
+    <EditTextPreference
+            app:key="excludeTac"
+            app:title="軌跡をプロットしないTAC（カンマ区切りで複数指定可）"
+            app:useSimpleSummaryProvider="true"
     />
 
     <SeekBarPreference

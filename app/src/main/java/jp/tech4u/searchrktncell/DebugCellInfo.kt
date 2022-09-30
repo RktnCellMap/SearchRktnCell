@@ -18,9 +18,10 @@ class DebugCellInfo {
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210105_higashiyamato_yamada.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210201_sayama_iruma.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210209_qurune.csv"
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210209_qurune_tac.csv"
         private const val DEBUG_LOAD_LOG_FILENAME = ""    // リリースはコレ
 
-        private const val DEBUG_TRACE_LOG_START_INDEX = 2300
+        private const val DEBUG_TRACE_LOG_START_INDEX = 0
 
         //const val DISABLE_RADIO_INFO = true
         const val DISABLE_RADIO_INFO = false    // リリースはコレ

@@ -34,7 +34,6 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.LatLngBounds
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
 import jp.tech4u.searchrktncell.data.LogVO
@@ -70,9 +69,6 @@ class MapsActivity : AppCompatActivity(),
 
         private lateinit var instance: MapsActivity
 
-        // root_preferences.xml のマイマップ定義の個数と合わせてください
-        private val myMapUrlKeys = arrayOf("myMapUrl", "myMapUrl2", "myMapUrl3", "myMapUrl4", "myMapUrl5")
-
         // あんまりやりたくないけど、みんなコレどうしてんだろう？
         fun getInstance(): MapsActivity {
             return instance
@@ -87,7 +83,7 @@ class MapsActivity : AppCompatActivity(),
     private val debugTimerHandler = Handler(Looper.getMainLooper())
     private val debugTimerRunnable: Runnable = object : Runnable {
         override fun run() {
-                onDataEvent(listOf(), LatLng(0.0, 0.0))
+            onDataEvent(listOf(), LatLng(0.0, 0.0))
             debugTimerHandler.postDelayed(this, DebugCellInfo.INTERVAL_MS)
         }
     }
@@ -233,6 +229,8 @@ class MapsActivity : AppCompatActivity(),
         val initLatLng = LatLng(INITIAL_MAP_LAT, INITIAL_MAP_LNG)
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initLatLng, INITIAL_MAP_ZOOM))
 
+        initRecordManager()
+
         readLogAndPutMarker()
         reloadMyMap(false)
 
@@ -242,6 +240,15 @@ class MapsActivity : AppCompatActivity(),
                 debugTimerHandler.postDelayed(debugTimerRunnable, 5000L)
             }
         }
+    }
+
+	// フラグの類を初期化する（設定から読み込む）
+    fun initRecordManager() {
+        val app = MyApplication.getInstance()
+
+        app.recordManager.bPlotPartner = Utils.getPreferenceBoolean("plotPartner", true)
+        app.recordManager.bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
+        Utils.getPreferenceString("excludeTac", "")?.let { app.recordManager.setExcludeTac(it) }
     }
 
     override fun onStart() {
@@ -364,7 +371,10 @@ class MapsActivity : AppCompatActivity(),
 
     private fun onLocation(location: Location) {
         val latlng = LatLng(location.latitude, location.longitude)
-        Log.v(localClassName, "onLocation ${latlng.latitude} , ${latlng.longitude}")
+        Log.v(
+            localClassName,
+            "onLocation ${latlng.latitude} , ${latlng.longitude} (${location.provider}, ${location.accuracy})"
+        )
 
         if (mMap.cameraPosition.zoom == INITIAL_MAP_ZOOM) {
             // 現在地 初回
@@ -414,9 +424,7 @@ class MapsActivity : AppCompatActivity(),
                     bgColor
                 )
                 cellInfoView.drawCellInfoView(cvo)
-                val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
-                val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
-                app.recordManager.plotAndLog(mMap, lvo, bPlotPartner, bPlotMyMapCell)
+                app.recordManager.plotAndLog(mMap, lvo)
 
                 latlng = LatLng(lvo.lat, lvo.lng)
             } else {
@@ -452,10 +460,7 @@ class MapsActivity : AppCompatActivity(),
             lastLogVO = logVO
 
             // 記録
-            val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
-            val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
-
-            app.recordManager.plotAndLog(mMap, logVO, bPlotPartner, bPlotMyMapCell)
+            app.recordManager.plotAndLog(mMap, logVO)
 
             val logFile = createLogFileObj()
             app.recordManager.writeCsvLog(logVO, logFile)
@@ -467,7 +472,7 @@ class MapsActivity : AppCompatActivity(),
             app.myMapManager.removeLocLine()
             app.mlsManager.removeMls()
         } else {
-            //// 基地局表示
+            //// 基地局線表示
             // マイマップにある場合はソレ
             val bExist = app.myMapManager.drawLine(latlng, lastLogVO, mMap)
             if (!bExist) {
@@ -478,50 +483,74 @@ class MapsActivity : AppCompatActivity(),
             }
         }
 
-        if (Utils.getPreferenceBoolean("displayCellName", true)) {
-            if (lastLogVO != null && "440" == lastLogVO.mccString && "11" == lastLogVO.mncString) {
-                val ctx = applicationContext
-                val name = app.myMapManager.getName(lastLogVO.ci)
-                when (name) {
-                    null -> txtCellName.text = ""
-                    "" -> {
-                        val cell = CellId(lastLogVO.ci)
-                        if (cell.sector in 1..12) {
-                            txtCellName.text = "${lastLogVO.tac} ${cell.eNB}-${cell.sector}"
-                            val bgColor = Utils.calcColor(-60, cell.sector3, true)
-
-                            // bgColor の輝度から、fgColorを白か黒か選ぶ
-                            val fgColor = ContextCompat.getColor(ctx, Utils.getRevMonoColor(bgColor))
-
-                            txtCellName.setBackgroundColor(bgColor)
-                            txtCellName.setTextColor(fgColor)
-                        } else {
-                            txtCellName.text = "フェムトセル？"
-                            // フェムトセルと言えば禿なので、この色
-                            txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorSoftbank))
-                            txtCellName.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
-                        }
-                    }
-                    else -> {
-                        txtCellName.text = name
-                        txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorMapObjBg))
-                        txtCellName.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
-                    }
-                }
-            } else {
-                txtCellName.text = ""
-            }
-        } else {
-            txtCellName.text = ""
-        }
-
-        // 名前が""なら非表示にする
-        txtCellName.visibility = if (txtCellName.text == "") View.INVISIBLE else View.VISIBLE
+        displayCellName(lastLogVO)
 
         // 地図表示位置反映
         if (bMoveCurrentLocation) {
             moveTo(latlng)
         }
+    }
+
+    private var prevDisplayedCell: Long? = -1
+
+    private fun displayCellName(logVO: LogVO?) {
+        // 前回と同じなら書き換えない
+        if (prevDisplayedCell == logVO?.ci) return
+        prevDisplayedCell = logVO?.ci
+
+        val app = MyApplication.getInstance()
+
+        if (!Utils.getPreferenceBoolean("displayCellName", true)) {
+            // 表示しない設定
+            txtCellName.text = ""
+        } else {
+            if (logVO == null || "440" != logVO.mccString || "11" != logVO.mncString) {
+                // 他キャリア
+                txtCellName.text = ""
+            } else {
+                val ctx = applicationContext
+                when (val name = app.myMapManager.getName(logVO.ci)) {
+                    null -> txtCellName.text = ""   // そもそもマイマップにeNB-LCIDの定義がない
+                    "" -> {
+                        // マイマップに乗ってない
+                        val cell = CellId(logVO.ci)
+                        when {
+                            app.recordManager.isExcludeTac(logVO.tac) -> {
+                                txtCellName.text = "除外TAC　${logVO.tac} ${cell.eNB}-${cell.sector}"
+                                // とりまフェムトセルと同色
+                                txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorSoftbank))
+                                txtCellName.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
+                            }
+                            cell.sector in 1..12 -> {
+                                txtCellName.text = "${logVO.tac}  ${cell.eNB}-${cell.sector}"
+                                val bgColor = Utils.calcColor(-60, cell.sector3, true)
+
+                                // bgColor の輝度から、fgColorを白か黒か選ぶ
+                                val fgColor = ContextCompat.getColor(ctx, Utils.getRevMonoColor(bgColor))
+
+                                txtCellName.setBackgroundColor(bgColor)
+                                txtCellName.setTextColor(fgColor)
+                            }
+                            else -> {
+                                txtCellName.text = "フェムト?　${logVO.tac} ${cell.eNB}-${cell.sector}"
+                                // フェムトセルと言えば禿なので、この色
+                                txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorSoftbank))
+                                txtCellName.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
+                            }
+                        }
+                    }
+                    else -> {
+                        // 基地局名表示
+                        txtCellName.text = name
+                        txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorMapObjBg))
+                        txtCellName.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
+                    }
+                }
+            }
+        }
+
+        // 名前が""なら非表示にする
+        txtCellName.visibility = if (txtCellName.text == "") View.INVISIBLE else View.VISIBLE
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -533,8 +562,9 @@ class MapsActivity : AppCompatActivity(),
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         // マイマップURLが1つでも設定されていたら、マイマップリロードのメニューを活性にする
+        val app = MyApplication.getInstance()
         var bEnable = false
-        for (key in myMapUrlKeys) {
+        for (key in app.myMapManager.myMapUrlKeys) {
             val mid = Utils.getMyMapMid(key)
             if (mid != "") {
                 bEnable = true
@@ -583,26 +613,20 @@ class MapsActivity : AppCompatActivity(),
         // 現在地追従モードが基地局連動かどうか
         val bMode = Utils.getPreferenceBoolean("locationMode", true)
 
-        var llBuilder: LatLngBounds.Builder? = null
+        var llArea: LatLngArea? = null
         if (bMode && app.myMapManager.myMapLL != null) {
             // 基地局連動モードで、マイマップから基地局発見の場合
-            llBuilder = LatLngBounds.Builder()
-            llBuilder.include(app.myMapManager.myMapLL!!)
+            llArea = LatLngArea(latlng)
+            llArea.include(app.myMapManager.myMapLL!!)
         } else if (bMode && app.mlsManager.foundMlsBounds != null) {
             // 基地局連動モードで、（マイマップから基地局発見できず、）MLSから基地局発見の場合
-            llBuilder = LatLngBounds.Builder()
-            llBuilder.include(app.mlsManager.foundMlsBounds!!.northeast)
-            llBuilder.include(app.mlsManager.foundMlsBounds!!.southwest)
+            llArea = LatLngArea(latlng)
+            llArea.include(app.mlsManager.foundMlsBounds!!.northeast)
+            llArea.include(app.mlsManager.foundMlsBounds!!.southwest)
         }
 
-        if (llBuilder != null) {
-            llBuilder.include(latlng)
-            // 拡大しすぎないように最低限のエリアを含める(MLSの場合はより拡大傾向)
-            llBuilder.include(LatLng(latlng.latitude - 0.003, latlng.longitude - 0.003 * 0.8))
-            llBuilder.include(LatLng(latlng.latitude + 0.003, latlng.longitude + 0.003 * 0.8))
-            // 参考：0.00001[度]≒1.11[m]  cos(36)≒0.8
-
-            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(llBuilder.build(), 100), cameraMoveDurationMs, null)
+        if (llArea != null) {
+            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(llArea.build(), 100), cameraMoveDurationMs, null)
         } else {
             mMap.animateCamera(CameraUpdateFactory.newLatLng(latlng), cameraMoveDurationMs, null)
         }
@@ -612,9 +636,7 @@ class MapsActivity : AppCompatActivity(),
         Log.i(localClassName, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊readLogAndPutMarker")
         val app = MyApplication.getInstance()
         app.recordManager.readLog(createLogFileObj())
-        val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
-        val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
-        app.recordManager.plotAll(mMap, CellId(0), bPlotPartner, bPlotMyMapCell)
+        app.recordManager.plotAll(mMap, CellId(0))
     }
 
     private fun requestPermission() {
@@ -711,7 +733,7 @@ class MapsActivity : AppCompatActivity(),
     }
 
     // 青ポチを表示する/しない
-    private fun setMyLocation(enable:Boolean) {
+    private fun setMyLocation(enable: Boolean) {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
             && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -725,10 +747,12 @@ class MapsActivity : AppCompatActivity(),
     }
 
     private fun reloadMyMap(bReload: Boolean) {
-        for ((index, key) in myMapUrlKeys.withIndex()) {
-
+        val app = MyApplication.getInstance()
+        for ((index, key) in app.myMapManager.myMapUrlKeys.withIndex()) {
             val mid = Utils.getMyMapMid(key)
-            if (mid != "") {
+            if (mid == "") {
+                app.myMapManager.clearMyMap(index)
+            } else {
                 scope.launch {
                     reloadMyMap(index, mid, bReload)
                 }
@@ -757,16 +781,18 @@ class MapsActivity : AppCompatActivity(),
             // onPostExecuteメソッドと同等の処理
             withContext(Dispatchers.Main) {
                 if (result == "OK") {
-                    app.myMapManager.plotPlacemark(index, app.mMap)
+                    app.myMapManager.plotAllPlacemarks(index, app.mMap)
                     val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
                     if (!bPlotMyMapCell) {
-                        // マイマップが判明したら消さなきゃいけない場合があるので、リプロットする
+                        // マイマップが判明したら軌跡を消さなきゃいけない場合があるので、軌跡をリプロットする
+                        initRecordManager()
                         app.recordManager.rePlot(app.mMap)
                     }
+                    prevDisplayedCell = -1
                 } else {
                     Toast.makeText(app.applicationContext, result, Toast.LENGTH_SHORT).show()
                 }
-                Log.i(localClassName, result)
+                Log.i(localClassName, "reloadMyMap $index result $result")
             }
         } catch (e: Exception) {
             // onCancelledメソッドと同等の処理
@@ -882,7 +908,7 @@ class MapsActivity : AppCompatActivity(),
     }
     */
 
-    private fun setTxtLatLng(gps:Boolean, latlng: LatLng) {
+    private fun setTxtLatLng(gps: Boolean, latlng: LatLng) {
         // TODO 現在地かどうかでスタイルを変える？
         txtLatLng.text = "%.6f,%.6f".format(latlng.latitude, latlng.longitude)
     }
@@ -914,16 +940,16 @@ class MapsActivity : AppCompatActivity(),
         }
         fusedLocationClient.lastLocation.addOnSuccessListener {
             // 前回の現在地
-                if (it != null) {
-                Log.d(localClassName, "lastLocation"+it.provider)
-                    val latlng = LatLng(it.latitude, it.longitude)
-                    moveTo(latlng)
+            if (it != null) {
+                Log.d(localClassName, "lastLocation" + it.provider)
+                val latlng = LatLng(it.latitude, it.longitude)
+                moveTo(latlng)
             } else {
                 // 特定できなかったので、もう一度呼ぶ
                 Log.d(localClassName, "ONE MORE enableLocation()")
                 enableLocation()
-                }
             }
+        }
 
         // 現在地連動タイマーがONなら解除・・・は、いらないかな。（無駄に呼ばれても副作用はなさそう）
     }
@@ -942,27 +968,41 @@ class MapsActivity : AppCompatActivity(),
                 }
                 "keepScreenOn" -> powerConnectionReceiver.setScreenOn()
                 "locationTimer", "locationTimerSecs" -> resetLocationTimer()
-                "plotPartner", "plotMyMapCell" -> app.recordManager.rePlot(mMap)
+                "plotPartner", "plotMyMapCell", "excludeTac" -> {
+                    initRecordManager()
+                    app.recordManager.rePlot(mMap)
+                }
                 else -> {
-                    var bMyMapUrl = false
-                    for ((index, keyName) in myMapUrlKeys.withIndex()) {
+                    var bMyMapUrlChanged = false
+                    for ((index, keyName) in app.myMapManager.myMapUrlKeys.withIndex()) {
                         // 該当マイマップだけリロード
-                        if (key == keyName) {
-                            val mid = Utils.getMyMapMid(key)
-                            if (mid != "") {
+                        if (key != null && key == keyName || key == keyName + "Enable") {
+                            val mid = Utils.getMyMapMid(keyName)
+                            if (mid == "") {
+                                val app = MyApplication.getInstance()
+                                app.myMapManager.clearMyMap(index)
+                            } else {
                                 scope.launch {
                                     reloadMyMap(index, mid, true)
                                 }
                             }
-                            bMyMapUrl = true
+                            bMyMapUrlChanged = true
                             break
                         }
                     }
-                    if (!bMyMapUrl) {
+                    if (!bMyMapUrlChanged) {
+                        // マイマップURL以外の設定が変更されました。
                         Log.i(localClassName, "onSharedPreferenceChanged($key)")
                     }
                 }
             }
+
+            // 書き換えが必要かもしれないので、適当な値を入れとく
+            // (必要な場合だけやるべきだけど、
+            // 　・漏れがあるとよろしくない。
+            // 　・余計な処理が走ったとしても大した処理量でない
+            // ということから、任意の設定をいじったら必ずやることにした)
+            prevDisplayedCell = -1
         }
     }
 }
