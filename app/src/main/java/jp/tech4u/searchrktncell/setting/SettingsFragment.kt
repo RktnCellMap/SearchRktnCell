@@ -4,12 +4,16 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.text.TextUtils
+import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
 import jp.tech4u.searchrktncell.DebugCellInfo
 import jp.tech4u.searchrktncell.MapsActivity
+import jp.tech4u.searchrktncell.MyApplication
 import jp.tech4u.searchrktncell.R
+import jp.tech4u.searchrktncell.util.Utils
 
 class SettingsFragment : PreferenceFragmentCompat() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
@@ -24,6 +28,27 @@ class SettingsFragment : PreferenceFragmentCompat() {
             val bwFromEarfcn: SwitchPreference? = findPreference("bwFromEarfcn")
             bwFromEarfcn?.isVisible = true
         }
+
+        val myMapUrlSummaryProvider = Preference.SummaryProvider<EditTextPreference> { preference ->
+            val mid = Utils.getMyMapMidFromUrl(preference.text)
+            if (mid == "") {
+                "未設定"
+            } else {
+                val app = MyApplication.getInstance()
+                val name = app.myMapManager.midNameMap[mid]
+                if (TextUtils.isEmpty(name)) {
+                    mid
+                } else {
+                    name
+                }
+            }
+        }
+
+        findPreference<EditTextPreference>("myMapUrl")?.summaryProvider = myMapUrlSummaryProvider
+        findPreference<EditTextPreference>("myMapUrl2")?.summaryProvider = myMapUrlSummaryProvider
+        findPreference<EditTextPreference>("myMapUrl3")?.summaryProvider = myMapUrlSummaryProvider
+        findPreference<EditTextPreference>("myMapUrl4")?.summaryProvider = myMapUrlSummaryProvider
+        findPreference<EditTextPreference>("myMapUrl5")?.summaryProvider = myMapUrlSummaryProvider
     }
 
     private fun getVersionName(context: Context): String {

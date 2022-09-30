@@ -20,6 +20,7 @@ class MyMapManager {
     private var kmlParserMap = mutableMapOf<Int, KmlParser>()
     private var locLine: Polyline? = null    // 基地局-現在地の線
     var myMapLL: LatLng? = null           // 掴んでいる基地局の位置
+    var midNameMap = mutableMapOf<String, String>()
 
     fun readMyMap(index: Int, mid: String, cacheFile: File, bReload: Boolean) {
         var kmlParser = kmlParserMap[index]
@@ -55,6 +56,7 @@ class MyMapManager {
 
         if (cacheFile.exists()) {
             kmlParser.parseMyMap(cacheFile)
+            midNameMap[mid] = kmlParser.name
         }
     }
 
@@ -93,7 +95,7 @@ class MyMapManager {
         if (kmlStyle?.href != null) {
             if (!kmlStyle.href!!.startsWith("http://") && !kmlStyle.href!!.startsWith("https://")) {
                 val bitmap = kmlParser.loadBitmap(kmlStyle)
-                if ( bitmap!=null) {
+                if (bitmap != null) {
                     val bitmap2 = Bitmap.createScaledBitmap(
                         bitmap,
                         (84 * kmlStyle.scale!!).toInt(), (84 * kmlStyle.scale!!).toInt(), true

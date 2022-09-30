@@ -2,20 +2,25 @@ package jp.tech4u.searchrktncell
 
 import android.Manifest
 import android.content.*
+import android.content.ClipData
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.*
 import android.graphics.drawable.Animatable
 import android.location.Location
+import android.net.Uri
 import android.os.*
 import android.telephony.*
 import android.util.Log
 import android.view.*
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.ActivityCompat
+import com.github.pengrad.mapscaleview.MapScaleView
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -36,13 +41,13 @@ import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
-import android.content.Intent
-import android.net.Uri
 
 
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
+    PopupMenu.OnMenuItemClickListener,
     GoogleMap.OnCameraMoveStartedListener,
+    GoogleMap.OnCameraIdleListener,
     GoogleMap.OnMyLocationButtonClickListener,
     SharedPreferences.OnSharedPreferenceChangeListener {
 
@@ -86,9 +91,11 @@ class MapsActivity : AppCompatActivity(),
 
     // UI部品
     private lateinit var cellInfoView: CellInfoView
+    private lateinit var btnGps: ImageButton
+    private lateinit var imgLocationCenter: ImageView
     private lateinit var txtCellName: TextView
     private lateinit var txtLatLng: TextView
-    private lateinit var btnGps: ImageButton
+    private lateinit var scaleView: MapScaleView
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var powerConnectionReceiver: PowerConnectionReceiver
@@ -112,13 +119,15 @@ class MapsActivity : AppCompatActivity(),
         setContentView(R.layout.activity_maps)
 
         cellInfoView = findViewById(R.id.cellInfoView)
+        btnGps = findViewById(R.id.btnGps)
+        imgLocationCenter = findViewById(R.id.imgLocationCenter)
         txtCellName = findViewById(R.id.txtCellName)
         txtLatLng = findViewById(R.id.txtLatLng)
-        btnGps = findViewById(R.id.btnGps)
+        scaleView = findViewById(R.id.scaleView)
+        scaleView.metersOnly()
 
         cellInfoView.setOnTouchListener(onTouchListener)
         btnGps.setOnClickListener { enableLocation() }
-        txtLatLng.setOnClickListener { onClickTxtLatLng() }
 
         //btnGps.setImageResource(R.drawable.gps_not_fixed)
         (btnGps.drawable as Animatable).start()
@@ -162,8 +171,38 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-    private fun onClickTxtLatLng() {
+    fun onClickTxtLatLng(view: View) {
         Log.d(localClassName, "onClickTxtLatLng")
+        PopupMenu(this, view).apply {
+            // MainActivity implements OnMenuItemClickListener
+            setOnMenuItemClickListener(this@MapsActivity)
+            inflate(R.menu.location_actions)
+            show()
+        }
+    }
+
+    override fun onMenuItemClick(item: MenuItem): Boolean {
+        val txt = txtLatLng.text;
+        return when (item.itemId) {
+            R.id.menu_copy -> {
+                Log.d(localClassName, "copy:" + txt);
+                val clipboardManager = applicationContext.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                clipboardManager.setPrimaryClip(ClipData.newPlainText("", txt))
+                Toast.makeText(applicationContext, "クリップボードにコピーしました", Toast.LENGTH_SHORT).show()
+                true
+            }
+            R.id.menu_open_map_app -> {
+                Log.d(localClassName, "map:" + txt);
+                val gmmIntentUri = Uri.parse("geo:$txt")
+                val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                mapIntent.setPackage("com.google.android.apps.maps")
+                mapIntent.resolveActivity(packageManager)?.let {
+                    startActivity(mapIntent)
+                }
+                true
+            }
+            else -> false
+        }
     }
 
     override fun onMapReady(googleMap: GoogleMap) {
@@ -182,6 +221,7 @@ class MapsActivity : AppCompatActivity(),
         val density = resources.displayMetrics.density
         mMap.setPadding(0, (34 * density).toInt(), 0, (34 * density).toInt())
         mMap.setOnCameraMoveStartedListener(this)
+        mMap.setOnCameraIdleListener(this)
         mMap.setOnMyLocationButtonClickListener(this)
 
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialMapPos, initialMapZoom))
@@ -421,16 +461,11 @@ class MapsActivity : AppCompatActivity(),
         } else {
             txtCellName.text = ""
         }
-
-        txtCellName.setBackgroundColor(
-            if (txtCellName.text == "") Color.TRANSPARENT else Color.argb(0xa0, 255, 255, 255)
-        )
+        txtCellName.visibility = if (txtCellName.text == "") View.INVISIBLE else View.VISIBLE
 
         // 地図表示位置反映
         if (bMoveCurrentLocation) {
             moveTo(latlng)
-        } else {
-            txtLatLng.visibility = View.INVISIBLE
         }
     }
 
@@ -470,7 +505,7 @@ class MapsActivity : AppCompatActivity(),
         return true
     }
 
-    private fun openUrl(url:String) {
+    private fun openUrl(url: String) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         startActivity(intent)
     }
@@ -486,8 +521,9 @@ class MapsActivity : AppCompatActivity(),
         val app = MyApplication.getInstance()
 
         btnGps.setImageResource(R.drawable.gps_fixed)
-        txtLatLng.text = "${latlng.latitude},${latlng.longitude}"
-        txtLatLng.visibility = View.VISIBLE
+        imgLocationCenter.visibility = View.INVISIBLE
+        setMyLocation(true)
+        setTxtLatLng(true, latlng)
 
         // 現在地追従モードが基地局連動かどうか
         val bMode = Utils.getPreferenceBoolean("locationMode", true)
@@ -619,6 +655,20 @@ class MapsActivity : AppCompatActivity(),
         tm.listen(phoneStateListener, PhoneStateListener.LISTEN_CELL_INFO or PhoneStateListener.LISTEN_SIGNAL_STRENGTHS)
     }
 
+    // 青ポチを表示する/しない
+    private fun setMyLocation(enable:Boolean) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+            && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            // 権限が無ければ何もしない
+            return
+        }
+
+        mMap.isMyLocationEnabled = enable
+    }
+
     private fun reloadMyMap(bReload: Boolean) {
         for ((index, key) in myMapUrlKeys.withIndex()) {
 
@@ -731,8 +781,15 @@ class MapsActivity : AppCompatActivity(),
         if (reason != GoogleMap.OnCameraMoveStartedListener.REASON_DEVELOPER_ANIMATION) {
             bMoveCurrentLocation = false
             btnGps.setImageResource(R.drawable.gps_off)
+            imgLocationCenter.visibility = View.VISIBLE
+            setMyLocation(false)
         }
         resetLocationTimer()
+    }
+
+    override fun onCameraIdle() {
+        setTxtLatLng(false, mMap.cameraPosition.target)
+        scaleView.update(mMap.cameraPosition.zoom, mMap.cameraPosition.target.latitude)
     }
 
     private fun resetLocationTimer() {
@@ -748,6 +805,10 @@ class MapsActivity : AppCompatActivity(),
         Log.i(localClassName, "onMyLocationButtonClick")
         enableLocation()
         return false
+    }
+
+    private fun setTxtLatLng(gps:Boolean, latlng: LatLng) {
+        txtLatLng.text = "%.6f,%.6f".format(latlng.latitude, latlng.longitude)
     }
 
     // 現在地追従を有効にする

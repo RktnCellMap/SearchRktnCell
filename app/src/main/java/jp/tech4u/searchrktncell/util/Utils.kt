@@ -1,6 +1,7 @@
 package jp.tech4u.searchrktncell.util
 
 import android.telephony.CellInfo
+import android.text.TextUtils
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
@@ -163,26 +164,35 @@ object Utils {
         try {
             val myMapUrl = getPreferenceString(key, null)
             if (myMapUrl != null) {
-                val myMapUrlTrimmed = myMapUrl.trim()
-                if (myMapUrlTrimmed.length == 33) {
-                    // 33文字の場合はそのまま
-                    mid = myMapUrlTrimmed
-                } else {
-                    // それ以外の場合は、URIを解析して引数midを取得
-                    val uri = URI(myMapUrlTrimmed)
-                    val query = uri.query
-                    val queryList = query.split("&")
-                    for (q in queryList) {
-                        val kv = q.split("=")
-                        if (kv[0] == "mid") {
-                            mid = kv[1]
-                        }
-                    }
-                }
+                mid = getMyMapMidFromUrl(myMapUrl)
             }
         } catch (e: Exception) {
             // マイマップURI解析失敗
             // ユーザーへの通知は、、、まあいいや・・・
+        }
+        return mid
+    }
+
+    fun getMyMapMidFromUrl(myMapUrl:String?): String {
+        if (TextUtils.isEmpty(myMapUrl)) {
+            return ""
+        }
+        var mid = ""
+        val myMapUrlTrimmed = myMapUrl!!.trim()
+        if (myMapUrlTrimmed.length == 33) {
+            // 33文字の場合はそのまま
+            mid = myMapUrlTrimmed
+        } else {
+            // それ以外の場合は、URIを解析して引数midを取得
+            val uri = URI(myMapUrlTrimmed)
+            val query = uri.query
+            val queryList = query.split("&")
+            for (q in queryList) {
+                val kv = q.split("=")
+                if (kv[0] == "mid") {
+                    mid = kv[1]
+                }
+            }
         }
         return mid
     }

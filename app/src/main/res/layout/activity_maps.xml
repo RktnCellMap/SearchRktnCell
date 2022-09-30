@@ -24,6 +24,28 @@
                 android:id="@+id/map"
                 tools:context=".MapsActivity"
                 android:name="com.google.android.gms.maps.SupportMapFragment"/>
+        <ImageButton
+                android:id="@+id/btnGps"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="12dp"
+                android:layout_marginTop="12dp"
+                android:layout_alignParentRight="true"
+                android:background="#D0ffffff"
+                android:elevation="5dp"
+                app:srcCompat="@drawable/gps_not_fixed"
+        />
+        <ImageView
+                android:id="@+id/imgLocationCenter"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                app:srcCompat="@drawable/ic_location_center"
+                android:gravity="center"
+                android:layout_centerVertical="true"
+                android:layout_centerHorizontal="true"
+                android:visibility="invisible"
+                app:tint="#333333"
+        />
         <TextView
                 android:id="@+id/txtCellName"
                 android:layout_width="wrap_content"
@@ -35,18 +57,8 @@
                 android:gravity="center_horizontal"
                 android:layout_centerHorizontal="true"
                 android:background="#A0FFFFFF"
-                android:textColor="#222222" />
-        <ImageButton
-                android:id="@+id/btnGps"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_marginEnd="12dp"
-                android:layout_marginTop="12dp"
-                android:layout_alignParentRight="true"
-                android:background="#D0ffffff"
-                android:elevation="5dp"
-                app:srcCompat="@drawable/gps_not_fixed"
-
+                android:textColor="#222222"
+                android:visibility="invisible"
         />
         <TextView
                 android:id="@+id/txtLatLng"
@@ -60,6 +72,18 @@
                 android:gravity="center_horizontal"
                 android:layout_centerHorizontal="true"
                 android:background="#A0FFFFFF"
-                android:textColor="#222222" />
+                android:textColor="#222222"
+                android:onClick="onClickTxtLatLng"
+        />
+        <com.github.pengrad.mapscaleview.MapScaleView
+                android:id="@+id/scaleView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_marginBottom="12dp"
+                android:layout_alignParentLeft="true"
+                android:layout_alignParentBottom="true"
+                app:scale_miles="false"
+        />
     </RelativeLayout>
 </LinearLayout>
