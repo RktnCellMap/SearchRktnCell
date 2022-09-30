@@ -792,8 +792,6 @@ class MapsActivity : AppCompatActivity(),
     private fun dummyCommunication() {
 
         if (!isConnected) return
-        val dummyCommunicationEnable = Utils.getPreferenceBoolean("dummyCommunicationEnable", true)
-        if (!dummyCommunicationEnable) return
 
         scope.launch {
             try {
@@ -903,10 +901,14 @@ class MapsActivity : AppCompatActivity(),
             enableLocation()
         }
         // ダミー通信(TA取得用)
-        if (dummyCommunicationEpoch < epoch) {
-            Log.d("CELLINFO", "dummyCommunication()")
-            dummyCommunicationEpoch = epoch + 5 * 1000
-            dummyCommunication()
+        val dummyCommunicationEnable = Utils.getPreferenceBoolean("dummyCommunicationEnable", true)
+        if (dummyCommunicationEnable) {
+            if (dummyCommunicationEpoch < epoch) {
+                Log.d("CELLINFO", "dummyCommunication()")
+                val dummyCommunicationInterval = Utils.getPreferenceInt("dummyCommunicationInterval", 5)
+                dummyCommunicationEpoch = epoch + dummyCommunicationInterval * 1000
+                dummyCommunication()
+            }
         }
 
         var lastLogVO: LogVO? = null

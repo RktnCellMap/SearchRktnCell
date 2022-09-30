@@ -60,7 +60,7 @@
 
     <SeekBarPreference
             app:key="refreshInterval"
-            app:title="現在地更新間隔"
+            app:title="現在地更新間隔[秒]"
             android:max="10"
             app:min="1"
             android:defaultValue="1"
@@ -257,6 +257,14 @@
             app:title="ダミー通信用のURL"
             app:useSimpleSummaryProvider="true"
             android:defaultValue="https://cellmap.rukihena.com/dummy.html"
+            />
+    <SeekBarPreference
+            app:key="dummyCommunicationInterval"
+            app:title="ダミー通信の間隔[秒]"
+            android:max="30"
+            app:min="1"
+            android:defaultValue="5"
+            app:showSeekBarValue="true"
             />
     <SwitchPreference
             app:key="dummyCommunicationEnable"
