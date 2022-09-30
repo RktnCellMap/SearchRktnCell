@@ -15,6 +15,7 @@ import java.lang.Integer.min
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.nio.file.Paths
 import kotlin.math.cos
 import kotlin.math.sqrt
 
@@ -170,21 +171,68 @@ object Utils {
         }
     }
 
-    // 設定からマイマップのMIDを取得する
+    // マイマップURLが有効か確認する
+    fun checkMyMapMid(key:String): Boolean {
+        if (! getPreferenceBoolean(key+"Enable", true)) return false
+
+        var midOrKmz = getMyMapKmzUrl(key)
+        return midOrKmz != ""
+    }
+
+    // 設定からマイマップURLを引き、midを返す
     fun getMyMapMid(key:String): String {
         var mid = ""
         try {
-            if ( getPreferenceBoolean(key+"Enable", true)) {
-                val myMapUrl = getPreferenceString(key, null)
-                if (myMapUrl != null) {
-                    mid = getMyMapMidFromUrl(myMapUrl)
-                }
+            val myMapUrl = getPreferenceString(key, null)
+            if (myMapUrl != null) {
+                mid = getMyMapMidFromUrl(myMapUrl)
             }
         } catch (e: Exception) {
             // マイマップURI解析失敗
             // ユーザーへの通知は、、、まあいいや・・・
         }
         return mid
+    }
+
+    // 設定からマイマップURLを引き、KMZアクセス用URLに変換して返す
+    // （最後が.kmzならそのまま、マイマップっぽかったらマイマップ用URL）
+    fun getMyMapKmzUrl(key:String): String {
+        var url = ""
+        try {
+            val myMapUrl = getPreferenceString(key, null)
+            if (myMapUrl != null) {
+                url = if (myMapUrl.toLowerCase().endsWith(".kmz")) {
+                    myMapUrl;
+                } else {
+                    var mid = getMyMapMidFromUrl(myMapUrl)
+                    "https://www.google.com/maps/d/kml?mid=$mid"
+                }
+            }
+        } catch (e: Exception) {
+            // マイマップURI解析失敗
+            // ユーザーへの通知は、、、まあいいや・・・
+        }
+        return url
+    }
+
+    // 設定からマイマップURLを引き、内部で使うキャッシュファイル名にして返す
+    fun getMyMapCacheName(key:String): String {
+        var myMapCacheName = ""
+        try {
+            val myMapUrl = getPreferenceString(key, null)
+            if (myMapUrl != null) {
+                myMapCacheName = if (myMapUrl.toLowerCase().endsWith(".kmz")) {
+                    key + Paths.get(URL(myMapUrl).path).fileName.toString()
+                } else {
+                    var mid = getMyMapMidFromUrl(myMapUrl)
+                    "$mid.kmz"
+                }
+            }
+        } catch (e: Exception) {
+            // マイマップURI解析失敗
+            // ユーザーへの通知は、、、まあいいや・・・
+        }
+        return myMapCacheName
     }
 
     fun getMyMapMidFromUrl(myMapUrl:String?): String {

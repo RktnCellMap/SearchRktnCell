@@ -28,7 +28,7 @@ object EciUtil {
         val eNB = matchResult.groupValues[1]
         val neNB256 = eNB.toLong() * 256
 
-        val lcidStr = matchResult.groupValues[0].substring(matchResult.groupValues[1].length + 1);
+        val lcidStr = matchResult.groupValues[0].substring(matchResult.groupValues[1].length + 1)
         val lcids = lcidStr.split(d2)
 
         val result = mutableListOf<Long>()

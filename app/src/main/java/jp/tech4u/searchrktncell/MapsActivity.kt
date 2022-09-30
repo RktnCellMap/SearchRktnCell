@@ -337,12 +337,16 @@ class MapsActivity : AppCompatActivity(),
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         Log.i(localClassName, "onConfigurationChanged")
-        when (newConfig.orientation) {
-            Configuration.ORIENTATION_LANDSCAPE -> supportActionBar!!.hide()
-            else -> supportActionBar!!.show()
-        }
 
-        supportActionBar!!.customView.invalidate()
+        try {
+            when (newConfig.orientation) {
+                Configuration.ORIENTATION_LANDSCAPE -> supportActionBar!!.hide()
+                else -> supportActionBar!!.show()
+            }
+        }
+        catch (e:Exception) {
+            e.message?.let { Log.e(localClassName, it) }
+        }
 
         // 書き換えが必要かもしれないので、適当な値を入れとく
         prevDisplayedCell = -1L
@@ -400,6 +404,12 @@ class MapsActivity : AppCompatActivity(),
             super.onCellInfoChanged(cellInfo)
             Log.i(localClassName, "onCellInfoChanged")
             cellInfo ?: return  // SIMを抜いたときはnullなので
+
+            val activeMnc = Utils.getActiveMnc(cellInfo)
+            if ( activeMnc != "11" ) {
+                // 楽天以外なら無視（DualSIM機で、他社をチラチラ拾ってしまうことがあるため）
+                return
+            }
             if (lastLatLng != null) {
                 val latlng = LatLng(lastLatLng!!.latitude, lastLatLng!!.longitude)
                 onDataEvent(cellInfo, latlng)
@@ -618,8 +628,7 @@ class MapsActivity : AppCompatActivity(),
         val app = MyApplication.getInstance()
         var bEnable = false
         for (key in app.myMapManager.myMapUrlKeys) {
-            val mid = Utils.getMyMapMid(key)
-            if (mid != "") {
+            if (Utils.checkMyMapMid(key)) {
                 bEnable = true
                 break
             }
@@ -802,24 +811,22 @@ class MapsActivity : AppCompatActivity(),
     private fun reloadMyMap(bReload: Boolean) {
         val app = MyApplication.getInstance()
         for ((index, key) in app.myMapManager.myMapUrlKeys.withIndex()) {
-            val mid = Utils.getMyMapMid(key)
-            if (mid == "") {
-                app.myMapManager.clearMyMap(index)
-            } else {
+            if (Utils.checkMyMapMid(key)) {
                 scope.launch {
-                    reloadMyMap(index, mid, bReload)
+                    reloadMyMap(index, key, bReload)
                 }
+            } else {
+                app.myMapManager.clearMyMap(index)
             }
         }
     }
 
-    private suspend fun reloadMyMap(index: Int, mid: String, bReload: Boolean) {
+    private suspend fun reloadMyMap(index: Int, key: String, bReload: Boolean) {
         try {
             // doInBackgroundメソッドと同等の処理
             val app = MyApplication.getInstance()
             val result = try {
-                val cacheFile = File(app.applicationContext.cacheDir, "$mid.kmz")
-                app.myMapManager.readMyMap(index, mid, cacheFile, bReload)
+                app.myMapManager.readMyMap(index, key, bReload)
                 "OK"
             } catch (e: MyException) {
                 e.message ?: ""
@@ -1034,13 +1041,12 @@ class MapsActivity : AppCompatActivity(),
                     for ((index, keyName) in app.myMapManager.myMapUrlKeys.withIndex()) {
                         // 該当マイマップだけリロード
                         if (key != null && key == keyName || key == keyName + "Enable") {
-                            val mid = Utils.getMyMapMid(keyName)
-                            if (mid == "") {
-                                app.myMapManager.clearMyMap(index)
-                            } else {
+                            if (Utils.checkMyMapMid(keyName)) {
                                 scope.launch {
-                                    reloadMyMap(index, mid, true)
+                                    reloadMyMap(index, keyName, true)
                                 }
+                            } else {
+                                app.myMapManager.clearMyMap(index)
                             }
                             bMyMapUrlChanged = true
                             break

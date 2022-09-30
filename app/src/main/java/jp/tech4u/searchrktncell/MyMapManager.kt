@@ -61,7 +61,10 @@ class MyMapManager {
         }
     }
 
-    fun readMyMap(index: Int, mid: String, cacheFile: File, bReload: Boolean) {
+    fun readMyMap(index: Int, key: String, bReload: Boolean) {
+        val cacheName = Utils.getMyMapCacheName(key)
+        val cacheFile = File(MyApplication.getInstance().cacheDir, cacheName)
+
         var kmlParser = kmlParserAry[index]
         if (kmlParser == null) {
             kmlParser = KmlParser()
@@ -71,7 +74,7 @@ class MyMapManager {
         if (bReload || !cacheFile.exists() || cacheFile.lastModified() < cutOff) {
             // 明示的なリロード、キャッシュが存在しない、古い場合　はサーバーから取得
             Log.i(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMapダウンロード開始します")
-            val urlString = "https://www.google.com/maps/d/kml?mid=$mid"
+            val urlString = Utils.getMyMapKmzUrl(key)
             val con = Utils.getHttpURLConnectionFromUrlString(urlString)
             var inputStream: InputStream? = null
             try {
@@ -95,7 +98,11 @@ class MyMapManager {
 
         if (cacheFile.exists()) {
             kmlParser.parseMyMap(cacheFile)
-            upsertMidAttribute(mid, kmlParser.name, kmlParser.description)
+            var mid = Utils.getMyMapMid(key)
+            if ( mid !="") {
+                // kmzの場合の名前表示は未対応です・・・
+                upsertMidAttribute(mid, kmlParser.name, kmlParser.description)
+            }
             if (kmlParser.eciDefined) {
                 eciDefined = true
             }
