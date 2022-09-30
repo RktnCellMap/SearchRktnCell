@@ -48,12 +48,22 @@ class MlsManager {
         CoroutineScope(Dispatchers.Main).launch {
             withContext(Dispatchers.Default) {
                 val riAry = dao.loadAllRadioInfos()
-                for(ri in riAry) {
+                for (ri in riAry) {
                     radioInfoMap[ri.cid] = ri
                 }
                 // このループはマルチスレッドで衝突しそうな気がする。が、とりあえず放置。
             }
         }
+    }
+
+    fun clearRadioInfo() {
+        val dao = MyApplication.database.radioInfoDao()
+        CoroutineScope(Dispatchers.Main).launch {
+            withContext(Dispatchers.Default) {
+                dao.deleteAll()
+            }
+        }
+        radioInfoMap.clear()
     }
 
     fun readMls(urlString: String, cacheFile: File, bReload: Boolean) {
@@ -131,7 +141,6 @@ class MlsManager {
         val taTh = Utils.getPreferenceInt("radioInfoTaThreshold", 1)
         val rsrpTh = Utils.getPreferenceInt("radioInfoRsrpThreshold", -70)
 
-
         // TAもRSRPもダメダメ→無視
         if (taTh < logVO.ta && logVO.rsrp < rsrpTh) return
 
@@ -151,7 +160,7 @@ class MlsManager {
         }
     }
 
-    private fun upsert(ri: RadioInfoEntity){
+    private fun upsert(ri: RadioInfoEntity) {
         val dao = MyApplication.database.radioInfoDao()
         CoroutineScope(Dispatchers.Main).launch {
             withContext(Dispatchers.Default) {
@@ -161,7 +170,7 @@ class MlsManager {
     }
 
     // MLSのセルの三角形などと、それへの直線を描画する
-    fun drawMlsCells(context : Context, latlng: LatLng, logVO: LogVO, mMap: GoogleMap) {
+    fun drawMlsCells(context: Context, latlng: LatLng, logVO: LogVO, mMap: GoogleMap) {
         if (lastCell != logVO.ci) {
             // 三角形の描画はハンドオーバーしたときだけ
             lastCell = logVO.ci
@@ -175,21 +184,35 @@ class MlsManager {
                 calcBestRadioPoint(logVO)
             }
 
+            // マクロセル判定
             val cellId = CellId(logVO.ci)
-            val cellidBase = logVO.ci - cellId.sector3
+            val bMacro = if ((logVO.ci / 0x400000).toInt() == 62) {
+                false   // 移動局
+            } else {
+                val enb3fff = (logVO.ci / 256).toInt() and 0x3fff
+                enb3fff < 5000
+            }
 
+            val ciRange = if (bMacro) {
+                // マクロセルなら、関連する3セルを採用
+                val cellidBase = logVO.ci - cellId.sector3
+                cellidBase..cellidBase + 2
+            } else {
+                // マクロセル以外は、自セルだけ
+                logVO.ci..logVO.ci
+            }
 
             val brpList = mutableListOf<MlsCellInfo>()
             val mlsList = mutableListOf<MlsCellInfo>()
-            for (sector in 0..2) {
-                val ri = radioInfoMap[cellidBase + sector]
+            for (ci in ciRange) {
+                val ri = radioInfoMap[ci]
                 if (ri != null) {
                     // 電測最良データがあった
                     val mci = MlsCellInfo(ri.lat, ri.lon, 0, ri.cid)
                     brpList.add(mci)
-                } else if (cidMap.containsKey(cellidBase + sector)) {
+                } else if (cidMap.containsKey(ci)) {
                     // MSLにあった
-                    mlsList.add(cidMap[cellidBase + sector]!!)
+                    mlsList.add(cidMap[ci]!!)
                 }
             }
 

@@ -1,5 +1,6 @@
 package jp.tech4u.searchrktncell.setting
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -8,7 +9,6 @@ import android.text.InputFilter
 import android.text.InputFilter.LengthFilter
 import android.text.InputType
 import android.text.TextUtils
-import android.widget.EditText
 import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
@@ -67,6 +67,19 @@ class SettingsFragment : PreferenceFragmentCompat() {
             // 文字数制限
             editText.selectAll() // select all text
             editText.filters = arrayOf<InputFilter>(LengthFilter(6))
+        }
+
+        val button: Preference? = findPreference("deleteAllRadioInfoButton")
+        button?.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+            AlertDialog.Builder(this.context)
+                //.setTitle("確認")
+                .setMessage("記録した最良電測ポイントを全て消去します。\nよろしいですか？")
+                .setNegativeButton("キャンセル", null)
+                .setPositiveButton("消去する") { dialog, which ->
+                    MyApplication.getInstance().mlsManager.clearRadioInfo()
+                }
+                .show()
+            true
         }
     }
 

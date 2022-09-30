@@ -172,6 +172,11 @@
             android:defaultValue="-70"
             app:showSeekBarValue="true"
     />
+    <Preference
+            android:key="deleteAllRadioInfoButton"
+            android:title="最良電測ポイントの削除"
+            android:summary="記録した最良電測ポイントを全て消去します"
+    />
 
     <SwitchPreference
             app:key="bwFromEarfcn"

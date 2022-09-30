@@ -34,4 +34,10 @@
     <color name="colorSignal3">#794c00</color> <!-- 弱：オレンジ -->
     <color name="colorSignal4">#7F2222</color> <!-- ぴえん：赤 -->
 
+    <!-- 基地局ID判定テキスト背景 -->
+    <color name="colorMacroCellBg">#749ced</color>  <!-- 未使用 -->
+    <color name="colorFemtoCellBg">#B6BBBE</color>
+    <color name="colorIndoorCellBg">#fe6d73</color>
+    <color name="colorPicoCellBg">#ffcb77</color>
+    <color name="colorMobileCellBg">#47c3b2</color>
 </resources>

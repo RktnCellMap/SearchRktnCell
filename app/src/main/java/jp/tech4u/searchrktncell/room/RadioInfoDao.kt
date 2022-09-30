@@ -10,6 +10,9 @@ interface RadioInfoDao {
     @Delete
     suspend fun delete(radioInfo : RadioInfoEntity)
 
+    @Query("delete from RadioInfoEntity")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM RadioInfoEntity")
     suspend fun loadAllRadioInfos(): Array<RadioInfoEntity>
 }

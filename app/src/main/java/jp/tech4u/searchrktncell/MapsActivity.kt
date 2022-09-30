@@ -6,6 +6,7 @@ import android.content.*
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.graphics.Typeface
 import android.graphics.drawable.Animatable
 import android.location.Location
 import android.net.Uri
@@ -102,7 +103,9 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var cellInfoView: CellInfoView
     private lateinit var btnGps: ImageButton
     private lateinit var imgLocationCenter: ImageView
-    private lateinit var txtCellName: TextView
+    private lateinit var txtCellInfoEci: TextView
+    private lateinit var txtCellInfoTac: TextView
+    private lateinit var txtCellInfoPci: TextView
     private lateinit var txtLatLng: TextView
     private lateinit var scaleView: MapScaleView
 
@@ -157,13 +160,22 @@ class MapsActivity : AppCompatActivity(),
         cellInfoView = findViewById(R.id.cellInfoView)
         btnGps = findViewById(R.id.btnGps)
         imgLocationCenter = findViewById(R.id.imgLocationCenter)
-        txtCellName = findViewById(R.id.txtCellName)
+        txtCellInfoEci = findViewById(R.id.txtCellInfoEci)
+        txtCellInfoTac = findViewById(R.id.txtCellInfoTac)
+        txtCellInfoPci = findViewById(R.id.txtCellInfoPci)
         txtLatLng = findViewById(R.id.txtLatLng)
         scaleView = findViewById(R.id.scaleView)
         scaleView.metersOnly()
 
         cellInfoView.setOnTouchListener(onTouchListener)
         btnGps.setOnClickListener { enableLocation() }
+
+
+        // Set up a default TextPaint object
+        val typeface = Typeface.createFromAsset(this.assets, "Abel-Regular.ttf")
+        txtCellInfoEci.typeface = typeface
+        txtCellInfoTac.typeface = typeface
+        txtCellInfoPci.typeface = typeface
 
         //btnGps.setImageResource(R.drawable.gps_not_fixed)
         (btnGps.drawable as Animatable).start()
@@ -317,7 +329,7 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-	// フラグの類を初期化する（設定から読み込む）
+    // フラグの類を初期化する（設定から読み込む）
     fun initRecordManager() {
         val app = MyApplication.getInstance()
 
@@ -381,6 +393,25 @@ class MapsActivity : AppCompatActivity(),
         setTheme()
     }
 
+    private var prevWidth = 0
+    private fun reCalcCellInfoViewLayout() {
+        // onConfigurationChanged() だとサイズが確定してないので、描画時にやる。
+
+        if (prevWidth == cellInfoView.width) {
+            // 変更されてなければ何もしない
+            return
+        }
+        prevWidth = cellInfoView.width
+
+        val density = resources.displayMetrics.density
+        val widthDp = cellInfoView.width / density
+        cellInfoView.bPortrait = widthDp < 500  // 横画面判定（縦横比ではなく、絶対的な横幅があるかどうかで判断）
+        cellInfoView.layoutParams.height = when {
+            cellInfoView.bPortrait -> (100 * density).toInt()
+            else -> (50 * density).toInt()
+        }
+    }
+
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult?) {
             locationResult ?: return
@@ -433,7 +464,7 @@ class MapsActivity : AppCompatActivity(),
             cellInfo ?: return  // SIMを抜いたときはnullなので
 
             val activeMnc = Utils.getActiveMnc(cellInfo)
-            if ( activeMnc != "11" ) {
+            if (activeMnc != "11") {
                 // 楽天以外なら無視（DualSIM機で、他社をチラチラ拾ってしまうことがあるため）
                 return
             }
@@ -491,6 +522,10 @@ class MapsActivity : AppCompatActivity(),
 
         val listLogVoNow = mutableListOf<LogVO>()
         val latlng: LatLng
+
+        // サイズ調整
+        reCalcCellInfoViewLayout()
+
         // デバッグならそれから、そうでなければ引数から採用
         if (debugCellInfo != null && debugCellInfo!!.isAvailable()) {
             if (bPress) return
@@ -585,55 +620,73 @@ class MapsActivity : AppCompatActivity(),
 
         if (!Utils.getPreferenceBoolean("displayCellName", true)) {
             // 表示しない設定
-            txtCellName.text = ""
+            txtCellInfoEci.text = ""
+            txtCellInfoTac.text = ""
+            txtCellInfoPci.text = ""
+            txtCellInfoTac.visibility = View.INVISIBLE
+            txtCellInfoPci.visibility = View.INVISIBLE
         } else {
             if (logVO == null || "440" != logVO.mccString || "11" != logVO.mncString) {
                 // 他キャリア
-                txtCellName.text = ""
+                txtCellInfoEci.text = ""
+                txtCellInfoTac.text = ""
+                txtCellInfoPci.text = ""
+                txtCellInfoTac.visibility = View.INVISIBLE
+                txtCellInfoPci.visibility = View.INVISIBLE
             } else {
                 val ctx = this
                 when (val name = app.myMapManager.getName(logVO.ci)) {
-                    null -> txtCellName.text = ""   // そもそもマイマップにeNB-LCIDの定義がない
+                    null -> txtCellInfoEci.text = ""   // そもそもマイマップにeNB-LCIDの定義がない
                     "" -> {
                         // マイマップに乗ってない
                         val cell = CellId(logVO.ci)
-                        when {
-                            app.recordManager.isExcludeTac(logVO.tac) -> {
-                                txtCellName.text = "除外TAC　${logVO.tac} ${cell.eNB}-${cell.sector}"
-                                // とりまフェムトセルと同色
-                                txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorSoftbank))
-                                txtCellName.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
-                            }
-                            cell.sector in 1..12 -> {
-                                txtCellName.text = "${logVO.tac}  ${cell.eNB}-${cell.sector}"
-                                val bgColor = Utils.calcColor(-60, cell.sector3, true)
 
-                                // bgColor の輝度から、fgColorを白か黒か選ぶ
-                                val fgColor = ContextCompat.getColor(ctx, Utils.getRevMonoColor(bgColor))
+                        val enbInfo = RmCellClassification.getEnbInfo(cell.eNB)
+                        val tacInfo = RmCellClassification.getTacInfo(logVO.tac)
+                        val pciInfo = RmCellClassification.getPciInfo(logVO.pci)
 
-                                txtCellName.setBackgroundColor(bgColor)
-                                txtCellName.setTextColor(fgColor)
-                            }
-                            else -> {
-                                txtCellName.text = "フェムト?　${logVO.tac} ${cell.eNB}-${cell.sector}"
-                                // フェムトセルと言えば禿なので、この色
-                                txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorSoftbank))
-                                txtCellName.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
-                            }
+                        //// ECI(eNB)
+                        val eciColor = RmCellClassification.getColor(enbInfo.second)
+                        val eciColors = RmCellClassification.getFgBgColor(ctx, eciColor, cell.sector3)
+                        txtCellInfoEci.setBackgroundColor(eciColors.first)
+                        txtCellInfoEci.setTextColor(eciColors.second)
+                        txtCellInfoEci.text = "${cell.eNB}-${cell.sector} (${enbInfo.first})"
+
+                        //// TAC
+                        // TACの色は、マクロセル以外（つまりCasaか移動局）の場合はその色、マクロセルならECIと同じ色
+                        val tacColor = when {
+                            tacInfo.second != 0 -> RmCellClassification.getColor(tacInfo.second)
+                            else -> eciColor
                         }
+                        val tacColors = RmCellClassification.getFgBgColor(ctx, tacColor, cell.sector3)
+                        txtCellInfoTac.setBackgroundColor(tacColors.first)
+                        txtCellInfoTac.setTextColor(tacColors.second)
+                        txtCellInfoTac.visibility = View.VISIBLE
+                        txtCellInfoTac.text = "TAC:${logVO.tac} (${tacInfo.first})"
+
+                        //// PCI
+                        val pciColor = RmCellClassification.getColor(pciInfo.second)
+                        val pciColors = RmCellClassification.getFgBgColor(ctx, pciColor, cell.sector3)
+                        txtCellInfoPci.setBackgroundColor(pciColors.first)
+                        txtCellInfoPci.setTextColor(pciColors.second)
+                        txtCellInfoPci.visibility = View.VISIBLE
+                        txtCellInfoPci.text = "PCI:${logVO.pci} (${pciInfo.first})"
                     }
                     else -> {
                         // 基地局名表示
-                        txtCellName.text = name
-                        txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorMapObjBg))
-                        txtCellName.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
+                        txtCellInfoEci.text = name
+                        txtCellInfoEci.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorMapObjBg))
+                        txtCellInfoEci.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
+
+                        txtCellInfoTac.visibility = View.INVISIBLE
+                        txtCellInfoPci.visibility = View.INVISIBLE
                     }
                 }
             }
         }
 
         // 名前が""なら非表示にする
-        txtCellName.visibility = if (txtCellName.text == "") View.INVISIBLE else View.VISIBLE
+        txtCellInfoEci.visibility = if (txtCellInfoEci.text == "") View.INVISIBLE else View.VISIBLE
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -724,7 +777,7 @@ class MapsActivity : AppCompatActivity(),
 
     // 権限有無をチェックする
     // 権限がない場合、かつ、bRequestがtrue なら、権限要求をする
-    private fun checkPermission(bRequest:Boolean) :Boolean {
+    private fun checkPermission(bRequest: Boolean): Boolean {
         if (ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -744,7 +797,7 @@ class MapsActivity : AppCompatActivity(),
         return false
     }
 
-    private fun showRequestPermissionUI(permission:String) {
+    private fun showRequestPermissionUI(permission: String) {
         val shouldShow = shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
         var msg = when (permission) {
             Manifest.permission.ACCESS_FINE_LOCATION -> "現在地を取得するため、位置情報の権限が必要です。"
@@ -795,7 +848,7 @@ class MapsActivity : AppCompatActivity(),
 
     // mMap.isMyLocationEnabled の、権限考慮版
     private fun setMyLocationEnabled() {
-        if ( !checkPermission(true) ) {
+        if (!checkPermission(true)) {
             return
         }
 

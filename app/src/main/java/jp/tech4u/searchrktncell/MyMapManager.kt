@@ -49,7 +49,7 @@ class MyMapManager {
     }
 
     private fun upsertMidAttribute(mid: String, name: String, description: String) {
-        var gmm = GoogleMyMapEntity(mid, name, description)
+        val gmm = GoogleMyMapEntity(mid, name, description)
         midAttributeMap[mid] = gmm
 
         // 次回起動時のために、roomで保存しておく
@@ -76,7 +76,7 @@ class MyMapManager {
             Log.i(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMapダウンロード開始します")
             val urlString = Utils.getMyMapKmzUrl(key)
             val con = Utils.getHttpURLConnectionFromUrlString(urlString)
-            var inputStream: InputStream? = null
+            val inputStream: InputStream?
             try {
                 inputStream = con.inputStream
             } catch (e: IOException) {
@@ -98,7 +98,7 @@ class MyMapManager {
 
         if (cacheFile.exists()) {
             kmlParser.parseMyMap(cacheFile)
-            var mid = Utils.getMyMapMid(key)
+            val mid = Utils.getMyMapMid(key)
             if ( mid !="") {
                 // kmzの場合の名前表示は未対応です・・・
             upsertMidAttribute(mid, kmlParser.name, kmlParser.description)
@@ -155,17 +155,35 @@ class MyMapManager {
         if (kmlStyle?.href != null) {
             if (!kmlStyle.href!!.startsWith("http://") && !kmlStyle.href!!.startsWith("https://")) {
                 val bitmap = kmlParser.loadBitmap(kmlStyle)
-                if (bitmap != null) {
-                    val bitmap2 = Bitmap.createScaledBitmap(
-                        bitmap,
-                        (84 * kmlStyle.scale!!).toInt(), (84 * kmlStyle.scale!!).toInt(), true
-                    )
+                if (bitmap != null && bitmap.width != 0 && bitmap.height != 0) {
+                    // サイズ調整する
+                    val size = 28F  // 設定で変更できるようにしましょうかね？？？
+                    val density = MyApplication.getInstance().resources.displayMetrics.density
+                    val scale = density * kmlStyle.scale!!
+
+                    val dstW: Float
+                    val dstH: Float
+                    val aspect = bitmap.width / bitmap.height.toFloat()
+                    if (aspect < 1) {
+                        dstW = size * aspect
+                        dstH = size
+                    } else {
+                        dstW = size
+                        dstH = size / aspect
+                    }
+                    val bitmap2 =
+                        Bitmap.createScaledBitmap(bitmap, (dstW * scale).toInt(), (dstH * scale).toInt(), true)
                     val bitmap3 = BitmapDescriptorFactory.fromBitmap(bitmap2)
                     markerOptions.icon(bitmap3)
                     if (kmlStyle.x == -1 && kmlStyle.y == -1) {
                         markerOptions.anchor(0.5f, 0.5f)
                     }
                 }
+            }
+            else {
+                // 外部アイコンは未対応です。（あった場合はエラーにせず表示しない）
+                // Googleマイマップで「以前のアイコン」を選ぶとコレになる
+                // （カスタムアイコンはkmzに含まれるので問題ない）
             }
         }
         val marker: Marker = mMap.addMarker(markerOptions)

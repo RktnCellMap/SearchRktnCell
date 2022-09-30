@@ -28,12 +28,15 @@ class CellInfoView : View {
     private var _stringR: String? = null
     private var _cellRsrp: Int? = null
 
-    private lateinit var barRect: RectF
-    private lateinit var barPadRect: RectF
+    private lateinit var barRect: RectF     // バーの内枠
+    private lateinit var barPadRect: RectF  // バーの外枠
+    private lateinit var textRect: RectF    // テキストエリアの矩形
 
     private lateinit var textBarPaint: TextPaint
     private lateinit var textPaintL: TextPaint
     private lateinit var textPaintR: TextPaint
+
+    var bPortrait = true
 
     /**
      * The text to draw
@@ -115,17 +118,29 @@ class CellInfoView : View {
     }
 
     private fun calcCoordinates() {
-        val contentWidth = width - paddingLeft - paddingRight
-        val contentHeight = height - paddingTop - paddingBottom
+        val barArea: RectF
+        val padding: Float
+        if (bPortrait) {
+            // 通常
+            barArea = RectF(0f, 0f, width.toFloat(), height / 2f)
+            padding = barArea.height() * 0.2f
+            textRect = RectF(0f + padding, height / 2f, width - padding, height - padding)
+        } else {
+            // 横長 要修正
+            val textWidth = height * 6f
+            barArea = RectF(textWidth, 0f, width.toFloat(), height.toFloat())
+            padding = barArea.height() * 0.2f
+            textRect = RectF(padding, padding / 2, textWidth, height - padding / 2)
+        }
 
         barRect = RectF(
-            contentHeight * 0.1f,
-            contentHeight * 0.1f,
-            contentWidth - contentHeight * 0.1f,
-            contentHeight * 0.4f
+            barArea.left + padding,
+            barArea.top + padding,
+            barArea.right - padding,
+            barArea.bottom - padding,
         )
 
-        val barPadding = contentHeight * 0.02f
+        val barPadding = barArea.height() * 0.04f
         barPadRect = RectF(
             barRect.left - barPadding,
             barRect.top - barPadding,
@@ -147,7 +162,7 @@ class CellInfoView : View {
         drawText(canvas)
     }
 
-    private fun darkColor(color:Int) : Int {
+    private fun darkColor(color: Int): Int {
         val hsv = floatArrayOf(0f, 0f, 0f)
         Color.colorToHSV(color, hsv)
         hsv[1] = hsv[1] / 2 // 彩度を落とす
@@ -168,7 +183,7 @@ class CellInfoView : View {
             barPaint.color = ContextCompat.getColor(context, R.color.colorCellInfoBarFrame)
             canvas.drawRect(barPadRect, barPaint)
 
-            when (Utils.getPreferenceString("dbmBarDesign", "default") ) {
+            when (Utils.getPreferenceString("dbmBarDesign", "default")) {
                 "default" -> {
                     // バー背景
                     barPaint.color = ContextCompat.getColor(context, R.color.colorCellInfoBarBg)
@@ -275,14 +290,12 @@ class CellInfoView : View {
     }
 
     private fun drawText(canvas: Canvas) {
-        val contentHeight = height - paddingTop - paddingBottom
-
-        val textLeft = barRect.left
-        val textRight = barRect.right
-        val text1Bottom = contentHeight * 0.7f
-        val text2Bottom = contentHeight * 0.9f
-        textPaintL.textSize = text2Bottom - text1Bottom
-        textPaintR.textSize = textPaintL.textSize * 2
+        val textLeft = textRect.left
+        val textRight = textRect.right
+        val text1Bottom = textRect.top + textRect.height() / 2
+        val text2Bottom = textRect.bottom
+        textPaintL.textSize = textRect.height() / 2
+        textPaintR.textSize = textRect.height()
 
         _stringL1?.let {
             canvas.drawText(
@@ -314,7 +327,7 @@ class CellInfoView : View {
 
     // 通常のデータ反映
     fun drawCellInfoView(cellInfo: CellInfo?) {
-        if ( cellInfo == null ) {
+        if (cellInfo == null) {
             drawCellInfoViewOutOfService()
         }
 
