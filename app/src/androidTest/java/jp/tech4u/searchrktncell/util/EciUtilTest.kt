@@ -39,13 +39,17 @@ class EciUtilTest {
 
         // 千葉 車載基地局
         eciAry = EciUtil.getEciFromMemo("2020.11.24 1015829-1,1015827-1\n車載基地局\n21.1 三里塚開局に伴い撤退？")
-        Assert.assertArrayEquals(longArrayOf(1015829 * 256 + 1), eciAry.toLongArray())
-        Assert.assertEquals("1015829-1", EciUtil.getEnbLcid(eciAry))
+        Assert.assertArrayEquals(longArrayOf(1015829 * 256 + 1, 1015827 * 256 + 1), eciAry.toLongArray())
+        Assert.assertEquals("1015829-1 1015827-1", EciUtil.getEnbLcid(eciAry))
 
         // 範囲
         eciAry = EciUtil.getEciFromMemo("end:279785-1~5<br>")
         Assert.assertEquals("279785-1~5", EciUtil.getEnbLcid(eciAry))
         Assert.assertArrayEquals(longArrayOf(71624961, 71624962, 71624963, 71624964, 71624965), eciAry.toLongArray())
+
+        eciAry = EciUtil.getEciFromMemo("end:279785-1~5<br>279786-1~5")
+        Assert.assertEquals("279785-1,2,3,4,5 279786-1,2,3,4,5", EciUtil.getEnbLcid(eciAry))
+        Assert.assertArrayEquals(longArrayOf(71624961, 71624962, 71624963, 71624964, 71624965, 71625217, 71625218, 71625219, 71625220, 71625221), eciAry.toLongArray())
 
         // 空テスト
         eciAry = listOf<Long>()

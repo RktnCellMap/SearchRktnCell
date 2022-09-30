@@ -28,7 +28,7 @@ class KmlParser {
     val kmlStyleMap = mutableMapOf<String, KmlStyle>()
     var markerList = mutableListOf<Marker>() // 全削除処理用
     var markerMapByEcis = mutableMapOf<String, Marker>() // 重複チェック用
-    val eciMap = mutableMapOf<Long, Placemark>()
+    val eciMap = mutableMapOf<Long, MutableList<Placemark>>()
     lateinit var extDir: Path
 
     private val kmlStyleMapMap = mutableMapOf<String, String>()
@@ -137,7 +137,10 @@ class KmlParser {
     private fun createEciMap() {
         for (placemark in placemarks) {
             for (eci in placemark.eciAry) {
-                eciMap[eci] = placemark
+                if (!eciMap.containsKey(eci)) {
+                    eciMap[eci] = mutableListOf()
+                }
+                eciMap[eci]?.add(placemark)
             }
         }
     }

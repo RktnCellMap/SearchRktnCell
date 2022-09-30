@@ -10,6 +10,8 @@ import android.util.Log
 import android.view.View
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.SphericalUtil
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
 import jp.tech4u.searchrktncell.util.*
 import kotlin.math.max
@@ -326,14 +328,14 @@ class CellInfoView : View {
     //// 外部から扱いやすいようにするメソッド群 ////
 
     // 通常のデータ反映
-    fun drawCellInfoView(cellInfo: CellInfo?) {
+    fun drawCellInfoView(cellInfo: CellInfo?, latLng: LatLng) {
         if (cellInfo == null) {
             drawCellInfoViewOutOfService()
         }
 
         if (cellInfo is CellInfoLte) {
             // 4G
-            drawCellInfoView(cellInfo)
+            drawCellInfoView(cellInfo, latLng)
         } else if (29 <= Build.VERSION.SDK_INT && cellInfo is CellInfoNr) {
             // 5G
             drawCellInfoView(cellInfo as CellInfoNr)
@@ -394,8 +396,12 @@ class CellInfoView : View {
         }
     }
 
+    private var prevTaLL = LatLng(0.0,0.0)
+    private var prevEci = CellInfo.UNAVAILABLE
+    private var prevTa = CellInfo.UNAVAILABLE
+
     // 4G
-    private fun drawCellInfoView(cellInfo: CellInfoLte?) {
+    private fun drawCellInfoView(cellInfo: CellInfoLte?, latLng: LatLng) {
         if (cellInfo != null) {
             val cid = cellInfo.cellIdentity
             val css = cellInfo.cellSignalStrength
@@ -403,7 +409,27 @@ class CellInfoView : View {
             val lcid = cid.ci and 255
 
             val bw = cellInfo.bandwidthStr
-            val ta = cellInfo.timingAdvanceStr
+            val ta = if (Utils.getPreferenceBoolean("countermeasuresForTaNotBeingUpdated", false)) {
+                // サムスンTA更新されない対策
+                if (prevEci != cellInfo.cellIdentity.ci || prevTa != cellInfo.cellSignalStrength.timingAdvance) {
+                    // 変化があったら正しいと判断する
+                    prevEci = cellInfo.cellIdentity.ci
+                    prevTa = cellInfo.cellSignalStrength.timingAdvance
+                    prevTaLL = LatLng(latLng.latitude, latLng.longitude)
+                    cellInfo.timingAdvanceStr
+                } else {
+                    if (SphericalUtil.computeDistanceBetween(prevTaLL, latLng) < 78) {
+                        // 変化がない場合、移動距離が一定以内なら信用してやる
+                        cellInfo.timingAdvanceStr
+                    } else {
+                        // 一定以上移動したのに変化が無いので信用しない！
+                        "-"
+                    }
+                }
+            } else {
+                // 通常
+                cellInfo.timingAdvanceStr
+            }
 
             val rsrp = if (css.rsrp != CellInfo.UNAVAILABLE) css.rsrp else null
             val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)

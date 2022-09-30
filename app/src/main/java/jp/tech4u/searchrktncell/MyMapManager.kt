@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.*
+import com.google.maps.android.SphericalUtil
 import jp.tech4u.searchrktncell.data.LogVO
 import jp.tech4u.searchrktncell.room.GoogleMyMapEntity
 import jp.tech4u.searchrktncell.util.MyException
@@ -198,13 +199,32 @@ class MyMapManager {
         myMapLL = null
     }
 
-    private fun getPlacemark(cellid: Long): KmlParser.Placemark? {
+    private fun getPlacemark(cellid: Long, latlng:LatLng): KmlParser.Placemark? {
         var placemark: KmlParser.Placemark? = null
 
         for (kmlParser in kmlParserAry) {
-            if (kmlParser==null) continue
+            if (kmlParser == null) continue
             val eciMap = kmlParser.eciMap
-            placemark = eciMap[cellid]
+            placemark = if (!eciMap.containsKey(cellid)) {
+                null
+            } else {
+                if (eciMap[cellid]?.size == 1) {
+                    // 1件の場合は安直にそれ。
+                    eciMap[cellid]?.get(0)
+                } else {
+                    // 複数ある場合は近いのを採用
+                    var minDistance = 40000000.0  // 大きい値ということで地球一周
+                    var rslt: KmlParser.Placemark? = null
+                    for (pm in eciMap[cellid]!!) {
+                        val dist = SphericalUtil.computeDistanceBetween(pm.ll, latlng)
+                        if (dist < minDistance) {
+                            rslt = pm
+                            minDistance = dist
+                        }
+                    }
+                    rslt
+                }
+            }
             if (placemark != null) break
         }
         return placemark
@@ -220,7 +240,7 @@ class MyMapManager {
             return false
         }
 
-        val placemark = getPlacemark(logVO.ci)
+        val placemark = getPlacemark(logVO.ci, latlng)
         myMapLL = placemark?.ll
 
         if (myMapLL != null) {
@@ -236,12 +256,12 @@ class MyMapManager {
         return false
     }
 
-    fun getName(cellid: Long): String? {
+    fun getName(cellid: Long, latlng: LatLng): String? {
         return if (!eciDefined) {
             // そもそもマイマップにeNB-LCIDの定義がない
             null
         } else {
-            val placemark = getPlacemark(cellid)
+            val placemark = getPlacemark(cellid, latlng)
             placemark?.name ?: ""
         }
     }

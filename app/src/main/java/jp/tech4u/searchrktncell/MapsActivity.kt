@@ -869,7 +869,7 @@ class MapsActivity : AppCompatActivity(),
                 if (cellInfo.rsrp == CellInfo.UNAVAILABLE) continue // https://twitter.com/InappyRakuten/status/1383300298953805824
 
                 // CellInfoView 反映
-                cellInfoView.drawCellInfoView(cellInfo)
+                cellInfoView.drawCellInfoView(cellInfo, latlng)
                 isConnected = true
 
                 // データ準備
@@ -924,7 +924,7 @@ class MapsActivity : AppCompatActivity(),
 
         // 圏外の場合は、上のビューに圏外表示
         if (lastLogVO == null) {
-            cellInfoView.drawCellInfoView(null)
+            cellInfoView.drawCellInfoView(null, latlng)
             isConnected = false
             app.myMapManager.removeLocLine()
             app.mlsManager.removeMls()
@@ -966,7 +966,7 @@ class MapsActivity : AppCompatActivity(),
             txtDestination.text = "目的地まで $distanceStr"
         }
 
-        displayCellName(lastLogVO)
+        displayCellName(lastLogVO, latlng)
         //Log.d(LOGTAG_CELLINFO,"onDataEvent(): CI:${lastLogVO?.ci} TA:${lastLogVO?.ta} $cellInfoAry")
 
         // 地図表示位置反映
@@ -977,7 +977,7 @@ class MapsActivity : AppCompatActivity(),
 
     private var prevDisplayedCell: Long? = -1
 
-    private fun displayCellName(logVO: LogVO?) {
+    private fun displayCellName(logVO: LogVO?, latlng: LatLng) {
         // 前回と同じなら書き換えない
         if (prevDisplayedCell == logVO?.ci) return
         prevDisplayedCell = logVO?.ci
@@ -1001,7 +1001,7 @@ class MapsActivity : AppCompatActivity(),
                 txtCellInfoPci.visibility = View.INVISIBLE
             } else {
                 val ctx = this
-                when (val name = app.myMapManager.getName(logVO.ci)) {
+                when (val name = app.myMapManager.getName(logVO.ci, latlng)) {
                     null -> txtCellInfoEci.text = ""   // そもそもマイマップにeNB-LCIDの定義がない
                     "" -> {
                         // マイマップに乗ってない

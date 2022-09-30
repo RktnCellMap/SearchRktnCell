@@ -274,6 +274,14 @@
             android:summaryOff="無効"
             android:defaultValue="true"
             />
+    <SwitchPreference
+            app:key="countermeasuresForTaNotBeingUpdated"
+            app:title="Samsung機でTAが更新されない件の対策"
+            android:summary="一定以上移動しても更新されない場合は - 表示にします"
+            android:summaryOn="対策する"
+            android:summaryOff="対策しない(通常)"
+            android:defaultValue="false"
+            />
 
     <Preference
             app:key="version"

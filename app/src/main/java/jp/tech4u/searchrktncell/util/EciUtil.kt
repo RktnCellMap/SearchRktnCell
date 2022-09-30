@@ -27,22 +27,26 @@ object EciUtil {
      * @args d2 LCID部分のデリミタ
      * @return return CellIDのリスト
      */
-    private fun convEciArray(matchResult: MatchResult, d2: Char): List<Long> {
-        val eNB = matchResult.groupValues[1]
-        val neNB256 = eNB.toLong() * 256
-
-        val lcidStr = matchResult.groupValues[0].substring(matchResult.groupValues[1].length + 1)
-        val lcids = lcidStr.split(d2)
-
+    private fun convEciArray(regex: Regex, value: String, d2: Char): List<Long> {
         val result = mutableListOf<Long>()
-        for (elm in lcids) {
-            val lcid = if (elm.startsWith(d2)) {
-                elm.substring(1)
-            } else {
-                elm
+        val matchResultSequence = regex.findAll(value)
+        for (matchResult in matchResultSequence) {
+            val eNB = matchResult.groupValues[1]
+            val neNB256 = eNB.toLong() * 256
+
+            val lcidStr =
+                matchResult.groupValues[0].substring(matchResult.groupValues[1].length + 1)
+            val lcids = lcidStr.split(d2)
+
+            for (elm in lcids) {
+                val lcid = if (elm.startsWith(d2)) {
+                    elm.substring(1)
+                } else {
+                    elm
+                }
+                val n = lcid.toLong()
+                result.add(neNB256 + n)
             }
-            val n = lcid.toLong()
-            result.add(neNB256 + n)
         }
         return result
     }
@@ -53,16 +57,19 @@ object EciUtil {
      * @args matchResult 正規表現にかけた結果
      * @return return CellIDのリスト
      */
-    private fun convEciArray(matchResult: MatchResult): List<Long> {
-        val eNB = matchResult.groupValues[1]
-        val neNB256 = eNB.toLong() * 256
-
-        val lcidFrom = matchResult.groupValues[2].toInt()
-        val lcidTo = matchResult.groupValues[3].toInt()
-
+    private fun convEciArray(regex: Regex, value: String): List<Long> {
         val result = mutableListOf<Long>()
-        for (lcid in (lcidFrom..lcidTo)) {
-            result.add(neNB256 + lcid)
+        val matchResultSequence = regex.findAll(value)
+        for (matchResult in matchResultSequence) {
+            val eNB = matchResult.groupValues[1]
+            val neNB256 = eNB.toLong() * 256
+
+            val lcidFrom = matchResult.groupValues[2].toInt()
+            val lcidTo = matchResult.groupValues[3].toInt()
+
+            for (lcid in (lcidFrom..lcidTo)) {
+                result.add(neNB256 + lcid)
+            }
         }
         return result
     }
@@ -74,30 +81,30 @@ object EciUtil {
      * @return return CellIDのリスト
      */
     fun getEciFromMemo(value: String): List<Long> {
-        var matchResult: MatchResult?
+        var result:List<Long>?
 
         // レンジ
-        matchResult = regexEnbRange.find(value)
-        if (matchResult != null) return convEciArray(matchResult)
+        result = convEciArray(regexEnbRange,value)
+        if (result.isNotEmpty()) return result
 
         // 標準
-        matchResult = regexEnbStd.find(value)
-        if (matchResult != null) return convEciArray(matchResult, ',')
+        result = convEciArray(regexEnbStd,value, ',')
+        if (result.isNotEmpty()) return result
 
         // 足立
-        matchResult = regexEnbAdt.find(value)
-        if (matchResult != null) return convEciArray(matchResult, '-')
+        result = convEciArray(regexEnbAdt,value, '-')
+        if (result.isNotEmpty()) return result
 
         // 春日部・播磨地域 （旧 上尾）　（１つバージョンもココ）
-        matchResult = regexEnbAgo.find(value)
-        if (matchResult != null) return convEciArray(matchResult, '-')
+        result = convEciArray(regexEnbAgo,value, '-')
+        if (result.isNotEmpty()) return result
 
         // LCID1つバージョン（複数バージョンに含めると、異形式の1個と誤認されることがあるので、最後に別処理でやる）
-        matchResult = regexEnbStdOne.find(value)
-        if (matchResult != null) return convEciArray(matchResult, ',')
+        result = convEciArray(regexEnbStdOne,value, ',')
+        if (result.isNotEmpty()) return result
 
-        // 見つからなかったので空を返す
-        return mutableListOf()
+        // 見つからなかったので空のまま返す
+        return result
     }
 
     /**

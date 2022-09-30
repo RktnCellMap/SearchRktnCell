@@ -9,8 +9,8 @@ android {
         applicationId "jp.tech4u.searchrktncell"
         minSdkVersion 26
         targetSdkVersion 30
-        versionCode 28
-        versionName "1.5.8"
+        versionCode 29
+        versionName "1.5.9"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
