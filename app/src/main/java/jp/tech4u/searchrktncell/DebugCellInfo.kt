@@ -19,9 +19,10 @@ class DebugCellInfo {
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210201_sayama_iruma.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210209_qurune.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210209_qurune_tac.csv"
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210907_kiyose.csv"
         private const val DEBUG_LOAD_LOG_FILENAME = ""    // リリースはコレ
 
-        private const val DEBUG_TRACE_LOG_START_INDEX = 0
+        private const val DEBUG_TRACE_LOG_START_INDEX = 500
 
         //const val DISABLE_RADIO_INFO = true
         const val DISABLE_RADIO_INFO = false    // リリースはコレ
@@ -39,7 +40,7 @@ class DebugCellInfo {
     fun init() {
         if (DEBUG_LOAD_LOG_FILENAME != "") {
             // ログファイルから取得版
-            val file = File(MyApplication.getInstance().externalCacheDir, DEBUG_LOAD_LOG_FILENAME)
+            val file = Utils.createLogFileObj(MyApplication.getInstance(), DEBUG_LOAD_LOG_FILENAME)
             Utils.readLog(file, logList)
         } else {
             // ハードコーディング版(DEBUG_CELL_INFO_ENABLEがtrueの場合に有効)

@@ -124,10 +124,10 @@ class RecordManager {
 
     fun writeCsvLog(logVO: LogVO, logFile: File) {
         val csvLine =
-            "${logVO.epoch},${logVO.lat},${logVO.lng},${logVO.mccString},${logVO.mncString},${logVO.tac},${logVO.ci},${logVO.rsrp},${logVO.bw},${logVO.ta}\n"
+            "${logVO.epoch},${logVO.lat},${logVO.lng},${logVO.mccString},${logVO.mncString},${logVO.tac},${logVO.ci},${logVO.rsrp},${logVO.bw},${logVO.ta},${logVO.pci}\n"
         csvList.add(csvLine)
 
-        val csvCacheCount = 100
+        val csvCacheCount = 10
         if (csvCacheCount < csvList.count()) {
             // 書き出し
             FileOutputStream(logFile, true).bufferedWriter().use { bw ->
@@ -139,7 +139,6 @@ class RecordManager {
             csvList.clear()
             Log.i(TAG, "csv保存しました")
         }
-
     }
 
     // 間引きするかどうかの判定

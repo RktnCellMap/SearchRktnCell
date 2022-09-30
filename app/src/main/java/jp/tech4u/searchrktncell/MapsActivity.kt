@@ -39,6 +39,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MapStyleOptions
 import jp.tech4u.searchrktncell.data.CellId
@@ -52,6 +53,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParserException
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
@@ -91,7 +93,7 @@ class MapsActivity : AppCompatActivity(),
     private val debugTimerHandler = Handler(Looper.getMainLooper())
     private val debugTimerRunnable: Runnable = object : Runnable {
         override fun run() {
-            onDataEvent(listOf(), LatLng(0.0, 0.0))
+            onDataEvent(listOf(), LatLng(0.0, 0.0), lastLocation)
             debugTimerHandler.postDelayed(this, DebugCellInfo.INTERVAL_MS)
         }
     }
@@ -107,6 +109,7 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var txtCellInfoTac: TextView
     private lateinit var txtCellInfoPci: TextView
     private lateinit var txtLatLng: TextView
+    private lateinit var txtDebug: TextView
     private lateinit var scaleView: MapScaleView
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -140,6 +143,7 @@ class MapsActivity : AppCompatActivity(),
 
     // 最後に得た現在地（PhoneStateListenerで参照）
     private var lastLatLng: LatLng? = null
+    private var lastLocation: Location? = null
 
     // 現在地追従するかのフラグ
     private var bMoveCurrentLocation = true
@@ -164,6 +168,8 @@ class MapsActivity : AppCompatActivity(),
         txtCellInfoTac = findViewById(R.id.txtCellInfoTac)
         txtCellInfoPci = findViewById(R.id.txtCellInfoPci)
         txtLatLng = findViewById(R.id.txtLatLng)
+        txtDebug = findViewById(R.id.txtDebug)
+        // txtDebug.visibility = View.VISIBLE   // デバッグ用
         scaleView = findViewById(R.id.scaleView)
         scaleView.metersOnly()
 
@@ -215,7 +221,7 @@ class MapsActivity : AppCompatActivity(),
             debugCellInfo!!.init()
 
             // 本来のログはデバッグの邪魔なので消しておく
-            val file = createLogFileObj()
+            val file = Utils.createLogFileObj(applicationContext)
             file.delete()
 
             cameraMoveDurationMs = (DebugCellInfo.INTERVAL_MS / 3).toInt()
@@ -303,6 +309,8 @@ class MapsActivity : AppCompatActivity(),
         mMap.uiSettings.isMapToolbarEnabled = false
         // 現在地ボタン（見た目の変え方が分からんので独自ボタンを置いた）
         mMap.uiSettings.isMyLocationButtonEnabled = false
+        // ズームボタン
+        mMap.uiSettings.isZoomControlsEnabled = true
 
         //mMap.isMyLocationEnabled = true   // ←権限的にそう簡単にいかない・・・
         setMyLocationEnabled()  // 権限考慮版
@@ -470,7 +478,7 @@ class MapsActivity : AppCompatActivity(),
             }
             if (lastLatLng != null) {
                 val latlng = LatLng(lastLatLng!!.latitude, lastLatLng!!.longitude)
-                onDataEvent(cellInfo, latlng)
+                onDataEvent(cellInfo, latlng, lastLocation)
             }
         }
 
@@ -487,7 +495,7 @@ class MapsActivity : AppCompatActivity(),
             if (lastLatLng != null) {
                 val latlng = LatLng(lastLatLng!!.latitude, lastLatLng!!.longitude)
                 val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
-                onDataEvent(tm.allCellInfo, latlng)
+                onDataEvent(tm.allCellInfo, latlng, lastLocation)
             }
         }
     }
@@ -504,6 +512,7 @@ class MapsActivity : AppCompatActivity(),
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latlng, 15f))
         }
         lastLatLng = LatLng(location.latitude, location.longitude)
+        lastLocation = location
         val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -513,12 +522,22 @@ class MapsActivity : AppCompatActivity(),
             return
         }
         val cellInfoAry = tm.allCellInfo
-        onDataEvent(cellInfoAry, latlng)
+        onDataEvent(cellInfoAry, latlng, lastLocation)
     }
 
     // onLocation と PhoneStateListenerのイベントから呼ばれる
-    private fun onDataEvent(cellInfoAry: List<CellInfo>, pLatlng: LatLng) {
+    private fun onDataEvent(cellInfoAry: List<CellInfo>, pLatlng: LatLng, pLocation: Location?) {
         val app = MyApplication.getInstance()
+
+        // デバッグ用の表示（リリース時もこのまま残します）
+        if ( pLocation != null && txtDebug.visibility== View.VISIBLE) {
+            txtDebug.text = "Acc:%.1f\nDeg:%5.1f Acc:%5.1f\nSpd:%5.1f Acc:%5.1f".format(
+                pLocation.accuracy,
+                pLocation.bearing,
+                pLocation.bearingAccuracyDegrees,
+                pLocation.speed,
+                pLocation.speedAccuracyMetersPerSecond)
+        }
 
         val listLogVoNow = mutableListOf<LogVO>()
         val latlng: LatLng
@@ -580,7 +599,7 @@ class MapsActivity : AppCompatActivity(),
             // 記録
             app.recordManager.plotAndLog(mMap, logVO)
 
-            val logFile = createLogFileObj()
+            val logFile = Utils.createLogFileObj(applicationContext)
             app.recordManager.writeCsvLog(logVO, logFile)
         }
 
@@ -605,7 +624,10 @@ class MapsActivity : AppCompatActivity(),
 
         // 地図表示位置反映
         if (bMoveCurrentLocation) {
-            moveTo(latlng)
+            if (pLocation != null)
+                moveTo(latlng, pLocation.bearing, pLocation.bearingAccuracyDegrees, pLocation.speed)
+            else
+                moveTo(latlng)
         }
     }
 
@@ -730,14 +752,8 @@ class MapsActivity : AppCompatActivity(),
         startActivity(intent)
     }
 
-    private fun createLogFileObj(): File {
-        val df = SimpleDateFormat("yyyyMMdd")
-        val yyyyMMdd = df.format(Date())
-        return File(applicationContext.externalCacheDir, "log_$yyyyMMdd.csv")
-    }
-
     // 地図の表示位置を現在地に移動する
-    private fun moveTo(latlng: LatLng) {
+    private fun moveTo(latlng: LatLng, bearing:Float=0f, bearingAccuracyDegrees:Float=0f, speed:Float=0f) {
         val app = MyApplication.getInstance()
 
         btnGps.setImageResource(R.drawable.gps_fixed)
@@ -763,14 +779,27 @@ class MapsActivity : AppCompatActivity(),
         if (llArea != null) {
             mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(llArea.build(), 100), cameraMoveDurationMs, null)
         } else {
-            mMap.animateCamera(CameraUpdateFactory.newLatLng(latlng), cameraMoveDurationMs, null)
+            val headingUp = Utils.getPreferenceBoolean("headingUp", false)
+            val headingUpSpeed = Utils.getPreferenceInt("headingUpSpeed", 5)
+            val headingUpBearingAccuracyDegrees = Utils.getPreferenceInt("headingUpBearingAccuracyDegrees", 5)
+
+            if (headingUp && (bearingAccuracyDegrees != 0f && bearingAccuracyDegrees < headingUpBearingAccuracyDegrees || headingUpSpeed <= speed * 3.6f)) {
+                val cameraPos = CameraPosition.Builder()
+                    .target(latlng)
+                    .zoom(mMap.cameraPosition.zoom)
+                    .bearing(bearing)
+                    .build()
+                mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPos), cameraMoveDurationMs, null)
+            } else {
+                mMap.animateCamera(CameraUpdateFactory.newLatLng(latlng), cameraMoveDurationMs, null)
+            }
         }
     }
 
     private fun readLogAndPutMarker() {
         Log.i(localClassName, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊readLogAndPutMarker")
         val app = MyApplication.getInstance()
-        app.recordManager.readLog(createLogFileObj())
+        app.recordManager.readLog(Utils.createLogFileObj(applicationContext))
         app.recordManager.plotAll(mMap, CellId(0))
     }
 

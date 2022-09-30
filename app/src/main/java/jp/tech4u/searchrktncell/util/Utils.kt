@@ -1,5 +1,6 @@
 package jp.tech4u.searchrktncell.util
 
+import android.content.Context
 import android.graphics.Color
 import android.telephony.CellInfo
 import android.text.TextUtils
@@ -16,6 +17,8 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.nio.file.Paths
+import java.text.SimpleDateFormat
+import java.util.*
 import kotlin.math.cos
 import kotlin.math.sqrt
 
@@ -79,6 +82,20 @@ object Utils {
         return con.inputStream
     }
      */
+
+    fun createLogFileObj(context: Context, filename :String? = null): File {
+        val filename2 = if ( filename==null) {
+            val df = SimpleDateFormat("yyyyMMdd")
+            val yyyyMMdd = df.format(Date())
+            "log_$yyyyMMdd.csv"
+        } else {
+            filename
+        }
+        val logDir = File(context.externalCacheDir, "logs")
+        //val logDir = File(context.getExternalFilesDir(null), "logs")
+        logDir.mkdir()
+        return File(logDir, filename2)
+    }
 
     fun readLog(file:File, logList :MutableList<LogVO>) {
         if (!file.exists()) {
