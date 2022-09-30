@@ -8,6 +8,7 @@ import android.location.Location
 import android.os.*
 import android.telephony.*
 import android.view.*
+import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -41,14 +42,13 @@ class MapsActivity : AppCompatActivity(),
         // デバッグ用ここから
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210105_higashiyamato_yamada_with_au.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210105_higashiyamato_yamada.csv"
-        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210119_sayama_iruma.csv"
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210201_sayama_iruma.csv"
         private const val DEBUG_LOAD_LOG_FILENAME = ""    // リリースはコレ
 
         //const val DEBUG_TRACE_LOG = true    // CellInfoViewクリックでログをトレース
         const val DEBUG_TRACE_LOG = false    // リリースはコレ
 
-        //private const val DEBUG_TRACE_LOG_START_INDEX = 4195 // ↑がfalseなら関係ない
-        private const val DEBUG_TRACE_LOG_START_INDEX = 1800 // ↑がfalseなら関係ない
+        private const val DEBUG_TRACE_LOG_START_INDEX = 1 // ↑がfalseなら関係ない
         // デバッグ用ここまで
 
         private const val PERMISSION_REQUEST_CODE = 44011   // なんでもいい
@@ -72,6 +72,7 @@ class MapsActivity : AppCompatActivity(),
 
     private lateinit var cellInfoView: CellInfoView
     private lateinit var txtCellName: TextView
+    private lateinit var btnGps:ImageButton
 
     private lateinit var mMap: GoogleMap
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -93,6 +94,7 @@ class MapsActivity : AppCompatActivity(),
 
         cellInfoView = findViewById(R.id.cellInfoView)
         txtCellName = findViewById(R.id.txtCellName)
+        btnGps = findViewById(R.id.btnGps)
 
         cellInfoView.setOnTouchListener { v, event ->
             // ... Respond to touch events
@@ -125,6 +127,10 @@ class MapsActivity : AppCompatActivity(),
                 }
                 else -> super.onTouchEvent(event)
             }
+        }
+
+        btnGps.setOnClickListener { v ->
+            enableLocation()
         }
 
         val br: BroadcastReceiver = PowerConnectionReceiver()
@@ -199,8 +205,6 @@ class MapsActivity : AppCompatActivity(),
         println("debugCellIndex:$debugCellIndex")
     }
 
-
-    //readMyMap
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         println("onCreateOptionsMenu")
         val inflater = menuInflater
@@ -258,64 +262,27 @@ class MapsActivity : AppCompatActivity(),
         var cellid = 0L
         for (cellInfo in cellInfoAry) {
             if (!cellInfo.isRegistered) continue
+            if (cellInfo.mncString != activeMnc) continue
 
-            var logVO: LogVO? = null
             if (cellInfo is CellInfoLte) {
-                if (cellInfo.mncString != activeMnc) continue
-                val cid = cellInfo.cellIdentity
-                val css = cellInfo.cellSignalStrength
-                val bw = cellInfo.bandwidth
-                val ta = CellInfo.UNAVAILABLE
-
+                // 4G
                 drawCellInfoView(cellInfo)
-
-                val epoch = System.currentTimeMillis() / 1000
-
-                logVO = LogVO(
-                    epoch.toInt(),
-                    latlng.latitude, latlng.longitude,
-                    cellInfo.mccString, cellInfo.mncString,
-                    cid.tac, cid.ci.toLong(), css.rsrp, bw, ta
-                )
-                cellid = cid.ci.toLong()
             } else if (29 <= Build.VERSION.SDK_INT && cellInfo is CellInfoNr) {
-                val cid = cellInfo.cellIdentity as CellIdentityNr
-                if (cellInfo.mncString != activeMnc) continue
-                val css = cellInfo.cellSignalStrength as CellSignalStrengthNr
-                val bw = cellInfo.bandwidth
-                val ta = CellInfo.UNAVAILABLE
-
+                // 5G
                 drawCellInfoView(cellInfo as CellInfoNr)
-
-                val epoch = System.currentTimeMillis() / 1000
-
-                logVO = LogVO(
-                    epoch.toInt(),
-                    latlng.latitude, latlng.longitude,
-                    cid.mccString, cid.mncString,
-                    cid.tac, cid.nci, css.csiRsrp, bw, ta
-                )
-                cellid = cid.nci
-
             } else if (cellInfo is CellInfoWcdma) {
-                if (cellInfo.cellIdentity.mncString != activeMnc) continue
-                val cid = cellInfo.cellIdentity
-                val css = cellInfo.cellSignalStrength
-                val bw = cellInfo.bandwidth
-                val ta = CellInfo.UNAVAILABLE
-
+                // 3G
                 drawCellInfoView(cellInfo)
-
-                val epoch = System.currentTimeMillis() / 1000
-
-                logVO = LogVO(
-                    epoch.toInt(),
-                    latlng.latitude, latlng.longitude,
-                    cid.mccString, cid.mncString,
-                    cid.lac, cid.cid.toLong(), css.dbm, bw, ta
-                )
-                cellid = cid.cid.toLong()
             }
+
+            val logVO = LogVO(
+                (System.currentTimeMillis() / 1000).toInt(),
+                latlng.latitude, latlng.longitude,
+                cellInfo.mccString, cellInfo.mncString,
+                cellInfo.tac, cellInfo.ci,
+                cellInfo.rsrp, cellInfo.bandwidth, cellInfo.timingAdvance
+            )
+            cellid = cellInfo.ci
 
             if (logVO != null) {
                 val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
@@ -565,6 +532,8 @@ class MapsActivity : AppCompatActivity(),
 
     // 地図の表示位置を現在地に移動する
     private fun moveTo(latlng: LatLng) {
+        btnGps.setImageResource(R.drawable.gps_fixed)
+
         // 現在地追従モードが基地局連動かどうか
         val bMode = Utils.getPreferenceBoolean("locationMode", true)
 
@@ -726,6 +695,8 @@ class MapsActivity : AppCompatActivity(),
 
         // マーカータップ時にズームボタンの左に表示されるツールバー（いらない）
         mMap.uiSettings.isMapToolbarEnabled = false
+        // 現在地ボタン（見た目の変え方が分からんので独自ボタンを置いた）
+        mMap.uiSettings.isMyLocationButtonEnabled = false
 
         //mMap.isMyLocationEnabled = true   // ←権限的にそう簡単にいかない・・・
         setMyLocationEnabled()  // 権限考慮版
@@ -802,6 +773,7 @@ class MapsActivity : AppCompatActivity(),
         println("onCameraMoveStarted:$reason")
         if (reason != GoogleMap.OnCameraMoveStartedListener.REASON_DEVELOPER_ANIMATION) {
             bMoveCurrentLocation = false
+            btnGps.setImageResource(R.drawable.gps_off)
         }
         resetLocationTimer()
     }
@@ -811,13 +783,21 @@ class MapsActivity : AppCompatActivity(),
         if (Utils.getPreferenceBoolean("locationTimer", false)) {
             // 現在地連動タイマースタート
             val secs = Utils.getPreferenceInt("locationTimerSecs", 60)
-            handler.postDelayed({ onMyLocationButtonClick() }, secs * 1000L)
+            handler.postDelayed({ enableLocation() }, secs * 1000L)
         }
     }
 
     override fun onMyLocationButtonClick(): Boolean {
         println("onMyLocationButtonClick")
+        enableLocation()
+        return false
+    }
+
+    // 現在地追従を有効にする
+    private fun enableLocation()
+    {
         bMoveCurrentLocation = true
+        btnGps.setImageResource(R.drawable.gps_not_fixed)
 
         fusedLocationClient.lastLocation
             .addOnSuccessListener {
@@ -828,8 +808,6 @@ class MapsActivity : AppCompatActivity(),
             }
 
         // 現在地連動タイマーがONなら解除・・・は、いらないかな。（無駄に呼ばれても副作用はなさそう）
-
-        return false
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
@@ -884,10 +862,12 @@ class MapsActivity : AppCompatActivity(),
             return try {
                 mlsManager.readMls(MLS_JSON_URL, cacheFile, bReload)
                 "OK"
+            } catch (e: MyException) {
+                e.message ?: ""
             } catch (e: IOException) {
-                "MLSダウンロード失敗"//resources.getString(R.string.connection_error)
+                "MLSダウンロード失敗"
             } catch (e: Exception) {
-                "MLS読み込み失敗"//resources.getString(R.string.xml_error)
+                "MLS読み込み失敗"
             }
         }
 
@@ -908,6 +888,8 @@ class MapsActivity : AppCompatActivity(),
                 val cacheFile = File(context.cacheDir, key + ".kmz")
                 myMapManager.readMyMap(key, cacheFile, bReload)
                 "OK"
+            } catch (e: MyException) {
+                e.message ?: ""
             } catch (e: IOException) {
                 "マイマップダウンロード失敗"//resources.getString(R.string.connection_error)
             } catch (e: XmlPullParserException) {

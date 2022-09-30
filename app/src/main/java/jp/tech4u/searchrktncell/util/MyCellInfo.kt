@@ -3,6 +3,8 @@ package jp.tech4u.searchrktncell.util
 import android.os.Build
 import android.telephony.*
 
+//// CellIdentity ////
+
 val CellInfo.mccString: String?
     get() =
         if (28 <= Build.VERSION.SDK_INT) {
@@ -47,6 +49,33 @@ val CellInfo.mncString: String?
             }
         }
 
+val CellInfo.tac: Int
+    get() =
+        if (this is CellInfoLte) {
+            cellIdentity.tac
+        } else if (29 <= Build.VERSION.SDK_INT && this is CellInfoNr) {
+            val cellIdentityNr = cellIdentity as CellIdentityNr
+            cellIdentityNr.tac
+        } else if (this is CellInfoWcdma) {
+            cellIdentity.lac
+        } else {
+            CellInfo.UNAVAILABLE
+        }
+
+val CellInfo.ci: Long
+    get() =
+        if (this is CellInfoLte) {
+            cellIdentity.ci.toLong()
+        } else if (29 <= Build.VERSION.SDK_INT && this is CellInfoNr) {
+            val cellIdentityNr = cellIdentity as CellIdentityNr
+            cellIdentityNr.nci
+        } else if (this is CellInfoWcdma) {
+            cellIdentity.cid.toLong()
+        } else {
+            CellInfo.UNAVAILABLE_LONG
+        }
+
+
 val CellInfo.bandwidth: Int
     get() =
         when (this) {
@@ -67,3 +96,27 @@ val CellInfo.bandwidth: Int
             }
             else -> CellInfo.UNAVAILABLE
         }
+
+//// CellSignalStrength ////
+
+val CellInfo.rsrp: Int
+    get() =
+        if (this is CellInfoLte) {
+            cellSignalStrength.rsrp
+        } else if (29 <= Build.VERSION.SDK_INT && this is CellInfoNr) {
+            val cellSignalStrengthNr = cellSignalStrength as CellSignalStrengthNr
+            cellSignalStrengthNr.csiRsrp
+        } else if (this is CellInfoWcdma) {
+            cellSignalStrength.dbm
+        } else {
+            CellInfo.UNAVAILABLE
+        }
+
+val CellInfo.timingAdvance: Int
+    get() =
+        when (this) {
+            is CellInfoLte -> this.cellSignalStrength.timingAdvance
+            else -> CellInfo.UNAVAILABLE
+        }
+
+

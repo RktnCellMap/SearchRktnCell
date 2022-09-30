@@ -8,7 +8,7 @@ import android.graphics.BitmapFactory
 import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.*
-import jp.tech4u.searchrktncell.util.EciUtil
+import jp.tech4u.searchrktncell.util.MyException
 import jp.tech4u.searchrktncell.util.Utils
 import jp.tech4u.searchrktncell.util.ZipUtil
 import java.io.*
@@ -37,7 +37,18 @@ class MyMapManager() {
             // 明示的なリロード、キャッシュが存在しない、古い場合　はサーバーから取得
             println("ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMapダウンロード開始します")
             val urlString = "https://www.google.com/maps/d/kml?mid=$mid"
-            val inputStream = Utils.getInputStreamFromUrlString(urlString)
+            val con = Utils.getHttpURLConnectionFromUrlString(urlString)
+            var inputStream: InputStream? = null
+            try {
+                inputStream = con.inputStream
+            } catch (e: IOException ) {
+                when (con.responseCode) {
+                    403 -> throw MyException("マイマップが非公開です")
+                    404 -> throw MyException("マイマップが見つかりません")
+                    in 500..599 -> throw MyException("マイマップサーバーエラー(${con.responseCode})")
+                    else -> throw MyException("マイマップ取得エラー(${con.responseCode})")
+                }
+            }
             if (inputStream != null) {
                 Utils.saveFromInputStream(inputStream, cacheFile)
                 println("ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMapダウンロードし、キャッシュを保存しますた")

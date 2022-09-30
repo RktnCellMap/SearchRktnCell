@@ -39,17 +39,21 @@ object Utils {
         inputStream.close()
     }
 
-    fun getInputStreamFromUrlString(urlString:String) :InputStream?{
+    fun getHttpURLConnectionFromUrlString(urlString:String) :HttpURLConnection {
         val url = URL(urlString)
-        return (url.openConnection() as? HttpURLConnection)?.run {
-            readTimeout = 10000
-            connectTimeout = 15000
-            requestMethod = "GET"
-            doInput = true
-            // Starts the query
-            connect()
-            inputStream
-        }
+        val con = url.openConnection() as HttpURLConnection
+        con.readTimeout = 10000
+        con.connectTimeout = 15000
+        con.requestMethod = "GET"
+        con.doInput = true
+        // Starts the query
+        con.connect()
+        return con
+    }
+
+    fun getInputStreamFromUrlString(urlString:String) :InputStream?{
+        val con = getHttpURLConnectionFromUrlString(urlString)
+        return con.inputStream
     }
 
     fun getPreferenceString(key: String, default: String?): String? {

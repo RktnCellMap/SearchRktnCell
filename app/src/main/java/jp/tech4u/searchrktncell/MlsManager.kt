@@ -8,6 +8,7 @@ import com.google.android.gms.maps.model.*
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.MlsCellInfo
 import jp.tech4u.searchrktncell.util.EciUtil
+import jp.tech4u.searchrktncell.util.MyException
 import jp.tech4u.searchrktncell.util.Utils
 import java.io.*
 import java.net.HttpURLConnection
@@ -33,12 +34,23 @@ class MlsManager {
         private val LINE_PATTERN_1: List<PatternItem> = listOf(GAP, DASH)
     }
 
-    fun readMls(url: String, cacheFile: File, bReload: Boolean) {
+    fun readMls(urlString: String, cacheFile: File, bReload: Boolean) {
         val cutOff: Long = System.currentTimeMillis() - 60 * 60 * 1000
         if (bReload || !cacheFile.exists() || cacheFile.lastModified() < cutOff) {
             // 明示的なリロード、キャッシュが存在しない、古い場合　はサーバーから取得
             println("＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLSダウンロード開始します")
-            val inputStream =  Utils.getInputStreamFromUrlString(url)
+            val con = Utils.getHttpURLConnectionFromUrlString(urlString)
+            var inputStream: InputStream? = null
+            try {
+                inputStream = con.inputStream
+            } catch (e: IOException ) {
+                when (con.responseCode) {
+                    403 -> throw MyException("MLSデータが非公開です")
+                    404 -> throw MyException("MLSデータが見つかりません")
+                    in 500..599 -> throw MyException("小平サーバーエラー(${con.responseCode})")
+                    else -> throw MyException("MLS取得エラー(${con.responseCode})")
+                }
+            }
             if(inputStream!=null) {
                 Utils.saveFromInputStream(inputStream, cacheFile)
             }
