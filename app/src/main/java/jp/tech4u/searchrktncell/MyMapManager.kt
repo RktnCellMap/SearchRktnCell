@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.*
@@ -57,14 +56,15 @@ class MyMapManager() {
         eciMap.clear()
 
         val name = cacheFile.nameWithoutExtension
-        val parent = cacheFile.parent.toString()
+        @Suppress("RECEIVER_NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
+        val parent: String = cacheFile.parent.toString()
         extDir = Paths.get(parent, name)
         val kmlFilePath = Paths.get(parent, name, "doc.kml")
 
         try {
             ZipUtil.unzipFile(cacheFile.toPath(), extDir)
             kmlParser.parse(Files.newInputStream(kmlFilePath))
-            createEciMap(name)
+            createEciMap()
         } catch (e: Exception) {
             println("ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込み失敗しました")
             println(e)
@@ -74,32 +74,10 @@ class MyMapManager() {
     }
 
     // kmlParser.placemarks から eciMap を作る
-    private fun createEciMap(name: String) {
-        if (kmlParser.placemarks == null) return
-
-        val getEciFn = if (name.contains("1Cndr7XT1tk7sB-_mZlJVGoujk1RdgW79"))
-            EciUtil::getEciFromNullpon  // 秋田対応
-        else
-            EciUtil::getEciFromMemo // 通常
-
+    private fun createEciMap() {
         for (placemark in kmlParser.placemarks) {
-            val eciPairN = getEciFn(placemark.name)
-            val eciArrayN = eciPairN.second
-            if (eciArrayN.isNotEmpty()) {
-                placemark.snippet = eciPairN.first
-                for (eci in eciArrayN) {
-                    eciMap[eci] = placemark
-                    //println(eci)
-                }
-            }
-            val eciPairD = getEciFn(placemark.description)
-            val eciArrayD = eciPairD.second
-            if (eciArrayD.isNotEmpty()) {
-                placemark.snippet = eciPairD.first
-                for (eci in eciArrayD) {
-                    eciMap[eci] = placemark
-                    //println(eci)
-                }
+            for (eci in placemark.eciAry) {
+                eciMap[eci] = placemark
             }
         }
     }
@@ -111,8 +89,6 @@ class MyMapManager() {
         }
         markerList.clear()
 
-        if (kmlParser.placemarks == null) return
-
         // マーカープロット
         for (placemark in kmlParser.placemarks) {
             plotImpl(placemark)
@@ -121,32 +97,30 @@ class MyMapManager() {
 
     // プロットする。実装部。
     private fun plotImpl(placemark: KmlParser.Placemark) {
-        if (placemark.ll != null) {
-            val kmlStyle = kmlParser.kmlStyleMap[placemark.styleUrl]
-            var markerOptions =
-                MarkerOptions()
-                    .position(placemark.ll)
-                    .title(placemark.name)
-                    .zIndex(4000f)
-            if (placemark.snippet != null && placemark.snippet != "" ) markerOptions.snippet(placemark.snippet )
+        val kmlStyle = kmlParser.kmlStyleMap[placemark.styleUrl]
+        var markerOptions =
+            MarkerOptions()
+                .position(placemark.ll)
+                .title(placemark.name)
+                .zIndex(4000f)
+        if (placemark.snippet != "" ) markerOptions.snippet(placemark.snippet )
 
-            if (kmlStyle?.href != null) {
-                if (!kmlStyle!!.href!!.startsWith("http://") && !kmlStyle!!.href!!.startsWith("https://")) {
-                    val bitmap = loadBitmap(kmlStyle)
-                    val bitmap2 = Bitmap.createScaledBitmap(
-                        bitmap,
-                        (84 * kmlStyle.scale!!).toInt(), (84 * kmlStyle.scale!!).toInt(), true
-                    )
-                    val bitmap3 = BitmapDescriptorFactory.fromBitmap(bitmap2)
-                    markerOptions.icon(bitmap3)
-                    if (kmlStyle.x == -1 && kmlStyle.y == -1) {
-                        markerOptions.anchor(0.5f, 0.5f)
-                    }
+        if (kmlStyle?.href != null) {
+            if (!kmlStyle.href!!.startsWith("http://") && !kmlStyle.href!!.startsWith("https://")) {
+                val bitmap = loadBitmap(kmlStyle)
+                val bitmap2 = Bitmap.createScaledBitmap(
+                    bitmap,
+                    (84 * kmlStyle.scale!!).toInt(), (84 * kmlStyle.scale!!).toInt(), true
+                )
+                val bitmap3 = BitmapDescriptorFactory.fromBitmap(bitmap2)
+                markerOptions.icon(bitmap3)
+                if (kmlStyle.x == -1 && kmlStyle.y == -1) {
+                    markerOptions.anchor(0.5f, 0.5f)
                 }
             }
-            val marker: Marker = mMap.addMarker(markerOptions)
-            markerList.add(marker)
         }
+        val marker: Marker = mMap.addMarker(markerOptions)
+        markerList.add(marker)
     }
 
     private fun loadBitmap(kmlStyle: KmlParser.KmlStyle): Bitmap {
@@ -157,10 +131,8 @@ class MyMapManager() {
 
     fun drawLine(latlng: LatLng, cellid: Long, mMap: GoogleMap): Boolean {
 
-        if (locLine != null) {
-            locLine!!.remove()
-            locLine = null
-        }
+        locLine?.remove()
+        locLine = null
 
         if (eciMap.containsKey(cellid)) {
             val placemark = eciMap[cellid]!!
@@ -189,10 +161,6 @@ class MyMapManager() {
         } else {
             ""
         }
-    }
-
-    fun contains(cellid: Long) : Boolean {
-        return eciMap.containsKey(cellid)
     }
 
     private inner class PowerConnectionReceiver : BroadcastReceiver() {

@@ -81,26 +81,16 @@ class MlsManager {
 
     fun removeMls() {
 
-        if (mlsMarker != null) {
-            mlsMarker!!.remove()
-            mlsMarker = null
-        }
-        if (mlsPolygon != null) {
-            mlsPolygon!!.remove()
-            mlsPolygon = null
-        }
-        if (mlsLine1 != null) {
-            mlsLine1!!.remove()
-            mlsLine1 = null
-        }
-        if (mlsLine2 != null) {
-            mlsLine2!!.remove()
-            mlsLine2 = null
-        }
-        if (mlsLocLine != null) {
-            mlsLocLine!!.remove()
-            mlsLocLine = null
-        }
+        mlsMarker?.remove()
+        mlsMarker = null
+        mlsPolygon?.remove()
+        mlsPolygon = null
+        mlsLine1?.remove()
+        mlsLine1 = null
+        mlsLine2?.remove()
+        mlsLine2 = null
+        mlsLocLine?.remove()
+        mlsLocLine = null
 
         foundMlsBounds = null
         lastCell = 0
@@ -127,7 +117,7 @@ class MlsManager {
 
                 when (enbList.count()) {
                     1 -> {
-                        // 2セクタ判明→マーカーを描く
+                        // 1セクタ判明→マーカーを描く
                         val cellInfo = enbList[0]
                         val mlsCi = CellId(cellInfo.cell)
                         val color = if (conCi.sector == mlsCi.sector) {
@@ -219,10 +209,8 @@ class MlsManager {
         }
 
         // セルが変わってない場合は、上の処理で消されないので、ココでももう一回消す
-        if (mlsLocLine != null) {
-            mlsLocLine!!.remove()
-            mlsLocLine = null
-        }
+        mlsLocLine?.remove()
+        mlsLocLine = null
 
         if (mlsLL != null) {
             mlsLocLine = mMap.addPolyline(

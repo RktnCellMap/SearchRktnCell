@@ -2,6 +2,7 @@ package jp.tech4u.searchrktncell
 
 import android.util.Xml
 import com.google.android.gms.maps.model.LatLng
+import jp.tech4u.searchrktncell.util.EciUtil
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
 import java.io.IOException
@@ -20,8 +21,9 @@ class KmlParser {
         val name: String,
         val description: String,
         val styleUrl: String,
-        val ll: LatLng?,
-        var snippet: String
+        val ll: LatLng,
+        val eciAry: List<Long>,
+        val snippet: String
     )
 
     data class KmlStyle(
@@ -40,10 +42,10 @@ class KmlParser {
         kmlStyleMapMap.clear()
         name = ""
         description = ""
-        inputStream.use { inputStream ->
+        inputStream.use {
             val parser: XmlPullParser = Xml.newPullParser()
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
-            parser.setInput(inputStream, null)
+            parser.setInput(it, null)
             parser.nextTag()
             readKml(parser)
         }
@@ -188,7 +190,7 @@ class KmlParser {
                 "name" -> readTag(parser, parser.name)
                 "Placemark" -> {
                     val placemark = readPlacemark(parser)
-                    if (placemark.ll != null) {
+                    if (placemark != null) {
                         placemarks.add(placemark)
                     }
                 }
@@ -199,12 +201,13 @@ class KmlParser {
     }
 
     @Throws(XmlPullParserException::class, IOException::class)
-    private fun readPlacemark(parser: XmlPullParser): Placemark {
+    private fun readPlacemark(parser: XmlPullParser): Placemark? {
         parser.require(XmlPullParser.START_TAG, ns, "Placemark")
         var name = ""
         var description = ""
         var styleUrl = ""
         var ll: LatLng? = null
+        var eciMutableList = mutableListOf<Long>()
         while (parser.next() != XmlPullParser.END_TAG) {
             if (parser.eventType != XmlPullParser.START_TAG) continue
             when (parser.name) {
@@ -213,12 +216,59 @@ class KmlParser {
                 "styleUrl" -> styleUrl = readTag(parser, "styleUrl")
                 "Point" -> ll = readPoint(parser)
                 "address" -> ll = readAddress(parser)
+                "ExtendedData" -> eciMutableList = readExtendedData(parser)
                 else -> skip(parser)
             }
         }
         parser.require(XmlPullParser.END_TAG, ns, "Placemark")
+
+        // 座標不明なら非対象
+        if (ll == null) return null
+
+        if (eciMutableList.count() == 0) {
+            // ExtendedData にデータが無ければ、name,descriptionから取得
+            eciMutableList.addAll(EciUtil.getEciFromMemo(name).asIterable())
+            eciMutableList.addAll(EciUtil.getEciFromMemo(description).asIterable())
+        }
+        val eciList = eciMutableList.sorted().distinct()
         styleUrl = styleUrl.substring(1)   // 先頭の#を取る
-        return Placemark(name, description, styleUrl, ll, "")
+        return Placemark(name, description, styleUrl, ll, eciList, EciUtil.getEnbLcid(eciList))
+    }
+
+    @Throws(IOException::class, XmlPullParserException::class)
+    private fun readExtendedData(parser: XmlPullParser): MutableList<Long> {
+        // 参考: https://twitter.com/nullpon44011/status/1353901694015311872
+        var b3enb = ""
+        var b3ci = ""
+        parser.require(XmlPullParser.START_TAG, ns, "ExtendedData")
+        while (parser.next() != XmlPullParser.END_TAG) {
+            if (parser.eventType != XmlPullParser.START_TAG) continue
+            when (parser.name) {
+                "Data" -> {
+                    val name = parser.getAttributeValue(null, "name")
+                    val value = readChildTag(parser, "value")
+                    if (name == "B3 eNB") {
+                        b3enb = value
+                    } else if (name == "B3 CI") {
+                        b3ci = value
+                    }
+                }
+                else -> skip(parser)
+            }
+        }
+        parser.require(XmlPullParser.END_TAG, ns, "ExtendedData")
+
+        val eciList = mutableListOf<Long>()
+        if (b3enb != "" && b3ci != "") {
+            val enb = b3enb.toLong()
+            val ciAry = b3ci.split('/')
+            for (ciStr in ciAry) {
+                val ci = ciStr.toInt()
+                val eci = enb * 256 + ci
+                eciList.add(eci)
+            }
+        }
+        return eciList
     }
 
     @Throws(IOException::class, XmlPullParserException::class)
@@ -263,6 +313,19 @@ class KmlParser {
 
         parser.require(XmlPullParser.END_TAG, ns, "address")
         return ll
+    }
+
+    @Throws(IOException::class, XmlPullParserException::class)
+    private fun readChildTag(parser: XmlPullParser, tag: String): String {
+        var value: String = ""
+        while (parser.next() != XmlPullParser.END_TAG) {
+            if (parser.eventType != XmlPullParser.START_TAG) continue
+            when (parser.name) {
+                tag -> value = readTag(parser, tag)
+                else -> skip(parser)
+            }
+        }
+        return value
     }
 
     @Throws(IOException::class, XmlPullParserException::class)

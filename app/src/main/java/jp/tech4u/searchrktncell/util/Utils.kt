@@ -29,7 +29,7 @@ object Utils {
         val fileOutput = FileOutputStream(cacheFile)
         val dataOut = DataOutputStream(fileOutput)
         val buffer = ByteArray(4096)
-        var readByte = 0
+        var readByte: Int
         while (dataInput.read(buffer).also { readByte = it } != -1) {
             dataOut.write(buffer, 0, readByte)
         }

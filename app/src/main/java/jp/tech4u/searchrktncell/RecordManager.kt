@@ -69,17 +69,26 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
         markerList.clear()
     }
 
+    // プロットするかの判定
+    // MyMap登録済みかの判定。パートナーエリアは無関係
+    private fun needPlotM(logVO: LogVO, bPlotMyMapCell: Boolean): Boolean {
+        if (bPlotMyMapCell) return true    // 設定で全プロットすることになってる
+
+        val name = myMapManager.getName(logVO.ci)
+        if (name == "") return true // マイマップになし→プロットする。
+        return name.endsWith('？')  // マイマップ上の名前の最後が？ならプロットする。そうでなければしない。
+    }
+
     fun plotAll(ci: CellId, bPlotPartner: Boolean, bPlotMyMapCell: Boolean) {
         nowCi = ci
 
         for (logVO in logList) {
-            if (!bPlotMyMapCell && myMapManager.contains(logVO.ci)){
-                continue
-            }
             if (bPlotPartner || logVO.mncString == "11") {
-                val ci = CellId(logVO.ci)
-                val bEqualBs = nowCi.equalBs(ci)
-                plot(logVO, ci, bEqualBs)
+                if (needPlotM(logVO, bPlotMyMapCell)) {
+                    val lci = CellId(logVO.ci)
+                    val bEqualBs = nowCi.equalBs(lci)
+                    plot(logVO, lci, bEqualBs)
+                }
             }
         }
     }
@@ -90,7 +99,7 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
 
         if (bEqualBs) {
             if (bPlotPartner || logVO.mncString == "11") {
-                if (bPlotMyMapCell || !myMapManager.contains(logVO.ci)){
+                if (needPlotM(logVO, bPlotMyMapCell)){
                     plot(logVO, ci, bEqualBs)
                 }
                 logList.add(logVO)
@@ -122,6 +131,7 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
 
     }
 
+    // 間引きするかどうかの判定
     private fun needPlot(logVO: LogVO, bEqualBs: Boolean): Boolean {
         var bPlot = false
         if (lLogVo.ci != logVO.ci) {

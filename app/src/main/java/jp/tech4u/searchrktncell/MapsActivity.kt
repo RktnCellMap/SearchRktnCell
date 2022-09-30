@@ -44,11 +44,11 @@ class MapsActivity : AppCompatActivity(),
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210119_sayama_iruma.csv"
         private const val DEBUG_LOAD_LOG_FILENAME = ""    // リリースはコレ
 
-        //private const val DEBUG_TRACE_LOG = true    // CellInfoViewクリックでログをトレース
-        private const val DEBUG_TRACE_LOG = false    // リリースはコレ
+        //const val DEBUG_TRACE_LOG = true    // CellInfoViewクリックでログをトレース
+        const val DEBUG_TRACE_LOG = false    // リリースはコレ
 
         //private const val DEBUG_TRACE_LOG_START_INDEX = 4195 // ↑がfalseなら関係ない
-        private const val DEBUG_TRACE_LOG_START_INDEX = 140 // ↑がfalseなら関係ない
+        private const val DEBUG_TRACE_LOG_START_INDEX = 1800 // ↑がfalseなら関係ない
         // デバッグ用ここまで
 
         private const val PERMISSION_REQUEST_CODE = 44011   // なんでもいい
@@ -183,22 +183,20 @@ class MapsActivity : AppCompatActivity(),
 
     // デバッグ用。
     private fun debug_nextLoc() {
-        if (recordManager != null) {
-            val lci = if (debugCellIndex < 0) {
-                debugCellIndex++
-                0
-            } else recordManager.logList[debugCellIndex].ci
+        val lci = if (debugCellIndex < 0) {
+            debugCellIndex++
+            0
+        } else recordManager.logList[debugCellIndex].ci
 
-            while (debugCellIndex < recordManager.logList.size) {
-                if (recordManager.logList[debugCellIndex].ci != lci) break
-                debugCellIndex++
-            }
-
-            if (recordManager.logList.size <= debugCellIndex) {
-                debugCellIndex = 0
-            }
-            println("debugCellIndex:$debugCellIndex")
+        while (debugCellIndex < recordManager.logList.size) {
+            if (recordManager.logList[debugCellIndex].ci != lci) break
+            debugCellIndex++
         }
+
+        if (recordManager.logList.size <= debugCellIndex) {
+            debugCellIndex = 0
+        }
+        println("debugCellIndex:$debugCellIndex")
     }
 
 
@@ -220,7 +218,7 @@ class MapsActivity : AppCompatActivity(),
         println("onOptionsItemSelected")
         println(item)
 
-        when (item.getItemId()) {
+        when (item.itemId) {
             R.id.reloadMls -> {
                 DownloadMlsTask().execute(true)
             }
@@ -357,10 +355,11 @@ class MapsActivity : AppCompatActivity(),
         // 圏外の場合は、上のビューに圏外表示
         if (cellid == 0L) drawCellInfoViewOutOfService()
 
-        if (myMapManager == null) return
+        //if (myMapManager == null) return
+
         //// 基地局表示
         // マイマップにある場合はソレ
-        val bExist = myMapManager!!.drawLine(latlngForDisp, cellid, mMap)
+        val bExist = myMapManager.drawLine(latlngForDisp, cellid, mMap)
         if (!bExist) {
             // マイマップにない場合はMLSから
             mlsManager.drawMlsCells(latlngForDisp, cellid, mMap)
@@ -569,10 +568,10 @@ class MapsActivity : AppCompatActivity(),
         // 現在地追従モードが基地局連動かどうか
         val bMode = Utils.getPreferenceBoolean("locationMode", true)
 
-        if (bMode && myMapManager != null && myMapManager!!.myMapLL != null) {
+        if (bMode && myMapManager.myMapLL != null) {
             // 基地局連動モードで、マイマップから基地局発見の場合
             val llBuilder = LatLngBounds.Builder()
-            llBuilder.include(myMapManager!!.myMapLL!!)
+            llBuilder.include(myMapManager.myMapLL!!)
             llBuilder.include(latlng)
             // 拡大しすぎないように最低限のエリアを含める
             llBuilder.include(LatLng(latlng.latitude - 0.005, latlng.longitude - 0.005))
@@ -907,7 +906,7 @@ class MapsActivity : AppCompatActivity(),
                 val bReload = args[1] as Boolean
                 val context = applicationContext
                 val cacheFile = File(context.cacheDir, key + ".kmz")
-                myMapManager!!.readMyMap(key, cacheFile, bReload)
+                myMapManager.readMyMap(key, cacheFile, bReload)
                 "OK"
             } catch (e: IOException) {
                 "マイマップダウンロード失敗"//resources.getString(R.string.connection_error)
@@ -921,7 +920,7 @@ class MapsActivity : AppCompatActivity(),
         override fun onPostExecute(result: String) {
 
             if (result == "OK") {
-                myMapManager?.plotPlacemark()
+                myMapManager.plotPlacemark()
                 val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
                 if (!bPlotMyMapCell) {
                     // マイマップが判明したので、消さなきゃいけない場合があるので、リプロットする
@@ -970,7 +969,7 @@ class MapsActivity : AppCompatActivity(),
     private fun setScreenOn(batteryStatus: Intent?) {
         if (batteryStatus == null) return
 
-        when (batteryStatus?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)) {
+        when (batteryStatus.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)) {
             0 -> {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }

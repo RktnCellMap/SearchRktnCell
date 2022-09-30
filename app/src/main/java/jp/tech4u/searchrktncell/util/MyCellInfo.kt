@@ -17,6 +17,7 @@ val CellInfo.mccString: String?
                 ""
             }
         } else {
+            @Suppress("DEPRECATION")
             when (this) {
                 is CellInfoLte -> this.cellIdentity.mcc.toString()
                 is CellInfoWcdma -> this.cellIdentity.mcc.toString()
@@ -38,6 +39,7 @@ val CellInfo.mncString: String?
                 ""
             }
         } else {
+            @Suppress("DEPRECATION")
             when (this) {
                 is CellInfoLte -> this.cellIdentity.mnc.toString()
                 is CellInfoWcdma -> this.cellIdentity.mnc.toString()
@@ -48,12 +50,19 @@ val CellInfo.mncString: String?
 val CellInfo.bandwidth: Int
     get() =
         when (this) {
-            is CellInfoLte -> when {
-                28 <= Build.VERSION.SDK_INT -> this.cellIdentity.bandwidth
-                else -> when (this.cellIdentity.earfcn) {
-                    1500 -> 20*1000
-                    1575 -> 5 * 1000
-                    else -> CellInfo.UNAVAILABLE
+            is CellInfoLte -> {
+                var bw = CellInfo.UNAVAILABLE
+                val bwFromEarfcn = Utils.getPreferenceBoolean("bwFromEarfcn", false)
+                if (28 <= Build.VERSION.SDK_INT && !bwFromEarfcn) {
+                    bw = this.cellIdentity.bandwidth
+                }
+                when (bw) {
+                    CellInfo.UNAVAILABLE -> when (this.cellIdentity.earfcn) {
+                        1500 -> 20 * 1000
+                        1575 -> 5 * 1000
+                        else -> CellInfo.UNAVAILABLE
+                    }
+                    else -> bw
                 }
             }
             else -> CellInfo.UNAVAILABLE

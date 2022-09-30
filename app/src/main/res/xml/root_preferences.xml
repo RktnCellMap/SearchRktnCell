@@ -75,6 +75,15 @@
             android:defaultValue="false"
     />
 
+    <SwitchPreference
+            app:key="bwFromEarfcn"
+            app:title="バンド幅取得元"
+            android:summaryOn="EARFCNから推定"
+            android:summaryOff="APIから"
+            android:defaultValue="false"
+            app:isPreferenceVisible="false"
+    />
+
     <Preference
             app:key="version"
             app:title="@string/version_title"
