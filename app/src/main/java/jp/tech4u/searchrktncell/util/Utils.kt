@@ -1,6 +1,8 @@
 package jp.tech4u.searchrktncell.util
 
+import androidx.preference.PreferenceManager
 import com.google.android.gms.maps.model.LatLng
+import jp.tech4u.searchrktncell.MapsActivity
 import java.io.*
 import java.net.HttpURLConnection
 import java.net.URL
@@ -48,5 +50,23 @@ object Utils {
             connect()
             inputStream
         }
+    }
+
+    fun getPreferenceString(key: String, default: String?): String? {
+        val context = MapsActivity.getInstance()
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        return sharedPreferences.getString(key, default)
+    }
+
+    fun getPreferenceInt(key: String, default: Int): Int {
+        val context = MapsActivity.getInstance()
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        return sharedPreferences.getInt(key, default)
+    }
+
+    fun getPreferenceBoolean(key: String, default: Boolean): Boolean {
+        val context = MapsActivity.getInstance()
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        return sharedPreferences.getBoolean(key, default)
     }
 }

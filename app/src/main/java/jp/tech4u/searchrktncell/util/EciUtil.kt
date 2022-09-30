@@ -28,43 +28,43 @@ object EciUtil {
     // 秋田
     private val regexEnbNullpon = Regex("($regEnb) ($regLcid) ($regPci)")
 
-    private fun conv3EciArray(destructured: MatchResult.Destructured): Pair<String, IntArray> {
+    private fun conv3EciArray(destructured: MatchResult.Destructured): Pair<String, LongArray> {
         val (eNB, c1, c2, c3) = destructured
-        val neNB256 = eNB.toInt() * 256
+        val neNB256 = eNB.toLong() * 256
         val n1 = c1.toInt()
         val n2 = c2.toInt()
         val n3 = c3.toInt()
         val enbLcid = "$eNB-$n1,$n2,$n3"
-        return Pair(enbLcid, intArrayOf(neNB256 + n1, neNB256 + n2, neNB256 + n3))
+        return Pair(enbLcid, longArrayOf(neNB256 + n1, neNB256 + n2, neNB256 + n3))
     }
 
-    private fun conv2EciArray(destructured: MatchResult.Destructured): Pair<String, IntArray> {
+    private fun conv2EciArray(destructured: MatchResult.Destructured): Pair<String, LongArray> {
         val (eNB, c1, c2) = destructured
-        val neNB256 = eNB.toInt() * 256
+        val neNB256 = eNB.toLong() * 256
         val n1 = c1.toInt()
         val n2 = c2.toInt()
         val enbLcid = "$eNB-$n1,$n2"
-        return Pair(enbLcid, intArrayOf(neNB256 + n1, neNB256 + n2))
+        return Pair(enbLcid, longArrayOf(neNB256 + n1, neNB256 + n2))
     }
 
-    private fun conv1EciArray(destructured: MatchResult.Destructured): Pair<String, IntArray> {
+    private fun conv1EciArray(destructured: MatchResult.Destructured): Pair<String, LongArray> {
         val (eNB, c1) = destructured
-        val neNB256 = eNB.toInt() * 256
+        val neNB256 = eNB.toLong() * 256
         val n1 = c1.toInt()
         val enbLcid = "$eNB-$n1"
-        return Pair(enbLcid, intArrayOf(neNB256 + n1))
+        return Pair(enbLcid, longArrayOf(neNB256 + n1))
     }
 
-    private fun convRangeEciArray(destructured: MatchResult.Destructured): Pair<String, IntArray> {
+    private fun convRangeEciArray(destructured: MatchResult.Destructured): Pair<String, LongArray> {
         val (eNB, c1, c2) = destructured
-        val neNB256 = eNB.toInt() * 256
+        val neNB256 = eNB.toLong() * 256
         val n1 = neNB256 + c1.toInt()
         val n2 = neNB256 + c2.toInt()
         val enbLcid = "$eNB-$n1~$n2"
-        return Pair(enbLcid, (n1..n2).toList().toIntArray())
+        return Pair(enbLcid, (n1..n2).toList().toLongArray())
     }
 
-    fun getEciFromMemo(value: String): Pair<String, IntArray> {
+    fun getEciFromMemo(value: String): Pair<String, LongArray> {
         var matchResult: MatchResult? = null
 
         // LCID3つ
@@ -95,20 +95,20 @@ object EciUtil {
         matchResult = regexEnb3c1.find(value)
         if (matchResult != null) return conv1EciArray(matchResult.destructured)
 
-        return Pair("", intArrayOf())
+        return Pair("", longArrayOf())
     }
 
-    fun getEciFromNullpon(value: String): Pair<String, IntArray> {
+    fun getEciFromNullpon(value: String): Pair<String, LongArray> {
         var matchResult: MatchResult? = null
 
-        val resultList = mutableListOf<Int>()
+        val resultList = mutableListOf<Long>()
         matchResult = regexEnbNullpon.find(value)
         while (matchResult != null) {
             val (eNB, c1, pci) = matchResult.destructured
-            resultList.add(eNB.toInt() * 256 + c1.toInt())
+            resultList.add(eNB.toLong() * 256 + c1.toInt())
             matchResult = matchResult.next()
         }
 
-        return Pair("", resultList.toIntArray())
+        return Pair("", resultList.toLongArray())
     }
 }

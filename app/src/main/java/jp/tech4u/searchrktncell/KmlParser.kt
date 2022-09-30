@@ -20,7 +20,7 @@ class KmlParser {
         val name: String,
         val description: String,
         val styleUrl: String,
-        val ll: LatLng,
+        val ll: LatLng?,
         var snippet: String
     )
 
@@ -186,7 +186,12 @@ class KmlParser {
             if (parser.eventType != XmlPullParser.START_TAG) continue
             when (parser.name) {
                 "name" -> readTag(parser, parser.name)
-                "Placemark" -> placemarks.add(readPlacemark(parser))
+                "Placemark" -> {
+                    val placemark = readPlacemark(parser)
+                    if (placemark.ll != null) {
+                        placemarks.add(placemark)
+                    }
+                }
                 else -> skip(parser)
             }
         }
@@ -199,7 +204,7 @@ class KmlParser {
         var name = ""
         var description = ""
         var styleUrl = ""
-        var ll: LatLng = LatLng(0.0, 0.0)
+        var ll: LatLng? = null
         while (parser.next() != XmlPullParser.END_TAG) {
             if (parser.eventType != XmlPullParser.START_TAG) continue
             when (parser.name) {
@@ -217,7 +222,7 @@ class KmlParser {
     }
 
     @Throws(IOException::class, XmlPullParserException::class)
-    private fun readPoint(parser: XmlPullParser): LatLng {
+    private fun readPoint(parser: XmlPullParser): LatLng? {
         parser.require(XmlPullParser.START_TAG, ns, "Point")
 
         var coordinates: String? = null
@@ -229,7 +234,7 @@ class KmlParser {
             }
         }
         parser.require(XmlPullParser.END_TAG, ns, "Point")
-        var ll: LatLng = LatLng(0.0, 0.0)
+        var ll: LatLng? = null
         if (coordinates != null) {
             val cols = coordinates.split(",")
             if (2 <= cols.size) {
@@ -243,8 +248,8 @@ class KmlParser {
     }
 
     @Throws(IOException::class, XmlPullParserException::class)
-    private fun readAddress(parser: XmlPullParser): LatLng {
-        var ll: LatLng = LatLng(0.0, 0.0)
+    private fun readAddress(parser: XmlPullParser): LatLng? {
+        var ll: LatLng? = null
 
         parser.require(XmlPullParser.START_TAG, ns, "address")
         val value = readText(parser)

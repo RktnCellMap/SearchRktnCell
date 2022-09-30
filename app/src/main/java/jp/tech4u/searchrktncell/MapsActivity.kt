@@ -8,11 +8,11 @@ import android.location.Location
 import android.os.*
 import android.telephony.*
 import android.view.*
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.preference.PreferenceManager
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -22,6 +22,8 @@ import com.google.android.gms.maps.model.*
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.LogVO
 import jp.tech4u.searchrktncell.setting.SettingsActivity
+import jp.tech4u.searchrktncell.util.*
+import jp.tech4u.searchrktncell.util.Utils
 import org.xmlpull.v1.XmlPullParserException
 import java.io.File
 import java.io.IOException
@@ -37,12 +39,16 @@ class MapsActivity : AppCompatActivity(),
 
     companion object {
         // デバッグ用ここから
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210105_higashiyamato_yamada_with_au.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210105_higashiyamato_yamada.csv"
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210119_sayama_iruma.csv"
         private const val DEBUG_LOAD_LOG_FILENAME = ""    // リリースはコレ
 
         //private const val DEBUG_TRACE_LOG = true    // CellInfoViewクリックでログをトレース
         private const val DEBUG_TRACE_LOG = false    // リリースはコレ
-        private const val DEBUG_TRACE_LOG_START_INDEX = 4195 // ↑がfalseなら関係ない
+
+        //private const val DEBUG_TRACE_LOG_START_INDEX = 4195 // ↑がfalseなら関係ない
+        private const val DEBUG_TRACE_LOG_START_INDEX = 140 // ↑がfalseなら関係ない
         // デバッグ用ここまで
 
         private const val PERMISSION_REQUEST_CODE = 44011   // なんでもいい
@@ -65,12 +71,13 @@ class MapsActivity : AppCompatActivity(),
     private val handler = Handler(Looper.getMainLooper())
 
     private lateinit var cellInfoView: CellInfoView
+    private lateinit var txtCellName: TextView
 
     private lateinit var mMap: GoogleMap
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
 
-    private lateinit var lastLocation: Location
+    private var lastLocation: Location? = null
     private lateinit var recordManager: RecordManager
     private lateinit var mlsManager: MlsManager
     private var myMapManager = MyMapManager()
@@ -85,6 +92,7 @@ class MapsActivity : AppCompatActivity(),
         setScreenOn()
 
         cellInfoView = findViewById(R.id.cellInfoView)
+        txtCellName = findViewById(R.id.txtCellName)
 
         cellInfoView.setOnTouchListener { v, event ->
             // ... Respond to touch events
@@ -128,6 +136,10 @@ class MapsActivity : AppCompatActivity(),
 
         requestPermission()
 
+
+        val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+        tm.listen(phoneStateListener, PhoneStateListener.LISTEN_CELL_INFO or PhoneStateListener.LISTEN_SIGNAL_STRENGTHS)
+
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         // 訳：SupportMapFragmentを取得し、マップを使用する準備ができたら通知（訳註：onMapReady()）を受け取ります。
         val mapFragment = supportFragmentManager
@@ -138,6 +150,35 @@ class MapsActivity : AppCompatActivity(),
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         createLocationCallback()
+    }
+
+    private val phoneStateListener = object : PhoneStateListener() {
+        override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>?) {
+            super.onCellInfoChanged(cellInfo)
+            println("onCellInfoChanged")
+            cellInfo ?: return  // SIMを抜いたときはnullなので
+            if (lastLocation != null) {
+                var latlng = LatLng(lastLocation!!.latitude, lastLocation!!.longitude)
+                onDataEvent(cellInfo, latlng)
+            }
+        }
+
+        override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
+            super.onSignalStrengthsChanged(signalStrength)
+            println("onSignalStrengthsChanged")
+            if (ActivityCompat.checkSelfPermission(
+                    getInstance(),
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return
+            }
+            if (lastLocation != null) {
+                var latlng = LatLng(lastLocation!!.latitude, lastLocation!!.longitude)
+                val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+                onDataEvent(tm.allCellInfo, latlng)
+            }
+        }
     }
 
     // デバッグ用。
@@ -200,73 +241,33 @@ class MapsActivity : AppCompatActivity(),
     }
 
     private fun onLocation(location: Location) {
-        val context = applicationContext
-
         var latlng = LatLng(location.latitude, location.longitude)
         println("${latlng.latitude} , ${latlng.longitude}")
 
         if (mMap.cameraPosition.zoom == initialMapZoom) {
             // 現在地 初回
-            lastLocation = location
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latlng, 15f))
         }
+        lastLocation = location
+        val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+        val cellInfoAry = tm.allCellInfo
+        onDataEvent(cellInfoAry, latlng)
+    }
 
-        val telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+    private fun onDataEvent(cellInfoAry: List<CellInfo>, latlng: LatLng) {
+        val activeMnc = getActiveMnc(cellInfoAry)
 
-        val cellInfoAry = telephonyManager.allCellInfo
-        val listMnc = mutableListOf<Int>()
-        for (cellInfo in cellInfoAry) {
-            if (cellInfo.isRegistered) {
-                if (cellInfo is CellInfoLte) {
-                    listMnc.add(cellInfo.cellIdentity.mnc)
-                } else if (cellInfo is CellInfoWcdma) {
-                    listMnc.add(cellInfo.cellIdentity.mnc)
-                }
-            }
-        }
-
-        // 採用するMNCを決める
-        val activeMnc = when (listMnc.size) {
-            0 -> -1 // 圏外
-            1 -> listMnc[0] // 1個の場合はそれ
-            else -> {
-                // 複数ある場合は、下記優先順位順で
-                when {
-                    listMnc.contains(11) -> 11
-                    listMnc.contains(53) -> 53
-                    listMnc.contains(50) -> 50
-                    else -> listMnc[0]  // 決められない場合は最初に見つかったモノ
-                }
-            }
-        }
-
-        var cellid = 0
+        var cellid = 0L
         for (cellInfo in cellInfoAry) {
             if (!cellInfo.isRegistered) continue
 
             var logVO: LogVO? = null
             if (cellInfo is CellInfoLte) {
-                if (cellInfo.cellIdentity.mnc != activeMnc) continue
+                if (cellInfo.mncString != activeMnc) continue
                 val cid = cellInfo.cellIdentity
                 val css = cellInfo.cellSignalStrength
-                val bw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) cid.bandwidth else CellInfo.UNAVAILABLE
-
-                drawCellInfoView(cellInfo, bw)
-
-                val epoch = System.currentTimeMillis() / 1000
-
-                logVO = LogVO(
-                    epoch.toInt(),
-                    latlng.latitude, latlng.longitude,
-                    cid.mcc, cid.mnc,
-                    cid.tac, cid.ci, css.rsrp, bw, css.timingAdvance
-                )
-                cellid = cid.ci
-            } else if (cellInfo is CellInfoWcdma) {
-                if (cellInfo.cellIdentity.mnc != activeMnc) continue
-                val cid = cellInfo.cellIdentity
-                val css = cellInfo.cellSignalStrength
-                val bw = CellInfo.UNAVAILABLE
+                val bw = cellInfo.bandwidth
+                val ta = CellInfo.UNAVAILABLE
 
                 drawCellInfoView(cellInfo)
 
@@ -275,14 +276,54 @@ class MapsActivity : AppCompatActivity(),
                 logVO = LogVO(
                     epoch.toInt(),
                     latlng.latitude, latlng.longitude,
-                    cid.mcc, cid.mnc,
-                    cid.lac, cid.cid, css.dbm, CellInfo.UNAVAILABLE, CellInfo.UNAVAILABLE
+                    cellInfo.mccString, cellInfo.mncString,
+                    cid.tac, cid.ci.toLong(), css.rsrp, bw, ta
                 )
-                cellid = cid.cid
+                cellid = cid.ci.toLong()
+            } else if (29 <= Build.VERSION.SDK_INT && cellInfo is CellInfoNr) {
+                val cid = cellInfo.cellIdentity as CellIdentityNr
+                if (cellInfo.mncString != activeMnc) continue
+                val css = cellInfo.cellSignalStrength as CellSignalStrengthNr
+                val bw = cellInfo.bandwidth
+                val ta = CellInfo.UNAVAILABLE
+
+                drawCellInfoView(cellInfo as CellInfoNr)
+
+                val epoch = System.currentTimeMillis() / 1000
+
+                logVO = LogVO(
+                    epoch.toInt(),
+                    latlng.latitude, latlng.longitude,
+                    cid.mccString, cid.mncString,
+                    cid.tac, cid.nci, css.csiRsrp, bw, ta
+                )
+                cellid = cid.nci
+
+            } else if (cellInfo is CellInfoWcdma) {
+                if (cellInfo.cellIdentity.mncString != activeMnc) continue
+                val cid = cellInfo.cellIdentity
+                val css = cellInfo.cellSignalStrength
+                val bw = cellInfo.bandwidth
+                val ta = CellInfo.UNAVAILABLE
+
+                drawCellInfoView(cellInfo)
+
+                val epoch = System.currentTimeMillis() / 1000
+
+                logVO = LogVO(
+                    epoch.toInt(),
+                    latlng.latitude, latlng.longitude,
+                    cid.mccString, cid.mncString,
+                    cid.lac, cid.cid.toLong(), css.dbm, bw, ta
+                )
+                cellid = cid.cid.toLong()
             }
 
             if (logVO != null) {
-                recordManager.plotAndLog(logVO)
+                val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
+                val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
+
+                recordManager.plotAndLog(logVO, bPlotPartner, bPlotMyMapCell)
 
                 val logFile = createLogFileObj()
                 recordManager.writeCsvLog(logVO, logFile)
@@ -291,14 +332,14 @@ class MapsActivity : AppCompatActivity(),
 
         //cellid = 184026*256+21 // docomo  dummy cell
         //cellid = 279785*256+12 // rakuten dummy cell
-
+        var latlngForDisp = latlng
         if (0 <= debugCellIndex && debugCellIndex < recordManager.logList.size) {
             val lvo = recordManager.logList[debugCellIndex]
             cellid = lvo.ci
-            latlng = LatLng(lvo.lat, lvo.lng)
+            latlngForDisp = LatLng(lvo.lat, lvo.lng)
             val bw = if (lvo.bw == CellInfo.UNAVAILABLE) "-" else "${lvo.bw / 1000}MHz"
             val ta = if (lvo.ta == CellInfo.UNAVAILABLE) "-" else lvo.ta.toString()
-            val bgColor = getColorByMnc(lvo.mcc, lvo.mnc)
+            val bgColor = getColorByMnc(lvo.mccString, lvo.mncString)
             val cvo = CellInfoViewVO(
                 if (lvo.rsrp < 0) lvo.rsrp else null,
                 "eNB-LCID: ${cellid / 256}-${cellid % 256}",
@@ -307,26 +348,67 @@ class MapsActivity : AppCompatActivity(),
                 bgColor
             )
             drawCellInfoView(cvo)
-            recordManager.plotAndLog(lvo)
+            val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
+            val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
+            recordManager.plotAndLog(lvo, bPlotPartner, bPlotMyMapCell)
             cvo.rsrp
         }
 
         // 圏外の場合は、上のビューに圏外表示
-        if (cellid == 0) drawCellInfoView(null, 0)
+        if (cellid == 0L) drawCellInfoViewOutOfService()
 
         if (myMapManager == null) return
         //// 基地局表示
         // マイマップにある場合はソレ
-        val bExist = myMapManager!!.drawLine(latlng, cellid, mMap)
-        mlsManager.removeMls()
-
+        val bExist = myMapManager!!.drawLine(latlngForDisp, cellid, mMap)
         if (!bExist) {
             // マイマップにない場合はMLSから
-            mlsManager.drawMlsCells(latlng, cellid, mMap)
+            mlsManager.drawMlsCells(latlngForDisp, cellid, mMap)
+        } else {
+            mlsManager.removeMls()
         }
 
+        if (Utils.getPreferenceBoolean("displayCellName", true)) {
+            txtCellName.text = myMapManager.getName(cellid)
+        } else {
+            txtCellName.text = ""
+        }
+
+        txtCellName.setBackgroundColor(
+            if (txtCellName.text == "") Color.TRANSPARENT else Color.argb(0xa0, 255, 255, 255)
+        )
+
+
         // 地図表示位置反映
-        if (bMoveCurrentLocation) moveTo(latlng)
+        if (bMoveCurrentLocation) moveTo(latlngForDisp)
+    }
+
+    private fun getActiveMnc(cellInfoAry: List<CellInfo>): String? {
+        val listMnc = mutableListOf<String?>()
+        for (cellInfo in cellInfoAry) {
+            if (cellInfo.isRegistered) {
+                val mncString = cellInfo.mncString
+                if (mncString != null && mncString != "") {
+                    listMnc.add(mncString)
+                }
+            }
+        }
+
+        // 採用するMNCを決める
+        val activeMnc = when (listMnc.size) {
+            0 -> null // 圏外
+            1 -> listMnc[0] // 1個の場合はそれ
+            else -> {
+                // 複数ある場合は、下記優先順位順で
+                when {
+                    listMnc.contains("11") -> "11"
+                    listMnc.contains("53") -> "53"
+                    listMnc.contains("50") -> "50"
+                    else -> listMnc[0]  // 決められない場合は最初に見つかったモノ
+                }
+            }
+        }
+        return activeMnc
     }
 
     private fun createLogFileObj(): File {
@@ -335,15 +417,22 @@ class MapsActivity : AppCompatActivity(),
         return File(applicationContext.externalCacheDir, "log_$yyyyMMdd.csv")
     }
 
-    data class CellInfoViewVO(val rsrp: Int?, val l1: String, val l2: String, val r: String, val bgColor: Int?)
+    data class CellInfoViewVO(
+        val rsrp: Int?,
+        val l1: String,
+        val l2: String,
+        val r: String,
+        val bgColor: Int?
+    )
 
-
-    private fun drawCellInfoView(cellInfo: CellInfoLte?, bw: Int) {
-        val vo = if (cellInfo != null) {
+    // 4G
+    private fun drawCellInfoView(cellInfo: CellInfoLte?) {
+        if (cellInfo != null) {
             val cid = cellInfo.cellIdentity
             val css = cellInfo.cellSignalStrength
             val enb = cid.ci ushr 8
             val lcid = cid.ci and 255
+            val bw = cellInfo.bandwidth
 
             val bwStr = if (bw != CellInfo.UNAVAILABLE) {
                 (bw / 1000).toString() + "MHz"
@@ -354,10 +443,50 @@ class MapsActivity : AppCompatActivity(),
                 if (css.timingAdvance != CellInfo.UNAVAILABLE) css.timingAdvance.toString() else "-"
 
             val rsrp = if (css.rsrp != CellInfo.UNAVAILABLE) css.rsrp else null
-            val bgColor = getColorByMnc(cid.mcc, cid.mnc)
-            CellInfoViewVO(
+            val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+            val vo = CellInfoViewVO(
                 rsrp,
                 "eNB-LCID: ${enb}-${lcid}",
+                "PCI: ${cid.pci}  BW: $bwStr",
+                "TA: $ta",
+                bgColor
+            )
+            drawCellInfoView(vo)
+        } else {
+            drawCellInfoViewOutOfService()
+        }
+    }
+
+    private fun drawCellInfoViewOutOfService() {
+        val vo = CellInfoViewVO(
+            null,
+            "eNB-LCID: -",
+            "PCI: -  BW: -",
+            "TA: -",
+            ContextCompat.getColor(applicationContext, R.color.colorForeign)
+        )
+        drawCellInfoView(vo)
+    }
+
+    // 5G
+    private fun drawCellInfoView(cellInfo: CellInfoNr?) {
+        val vo = if (cellInfo != null) {
+            val cid = cellInfo.cellIdentity as CellIdentityNr
+            val css = cellInfo.cellSignalStrength as CellSignalStrengthNr
+            val bw = cellInfo.bandwidth
+
+            val bwStr = if (bw != CellInfo.UNAVAILABLE) {
+                (bw / 1000).toString() + "MHz"
+            } else {
+                "-"
+            }
+            val ta = "-"
+
+            val rsrp = if (css.csiRsrp != CellInfo.UNAVAILABLE) css.csiRsrp else null
+            val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+            CellInfoViewVO(
+                rsrp,
+                "NCI: ${cid.nci}",
                 "PCI: ${cid.pci}  BW: $bwStr",
                 "TA: $ta",
                 bgColor
@@ -365,7 +494,7 @@ class MapsActivity : AppCompatActivity(),
         } else {
             CellInfoViewVO(
                 null,
-                "eNB-LCID: -",
+                "NCI: -",
                 "PCI: -  BW: -",
                 "TA: -",
                 null
@@ -374,6 +503,7 @@ class MapsActivity : AppCompatActivity(),
         drawCellInfoView(vo)
     }
 
+    // 3G
     private fun drawCellInfoView(cellInfo: CellInfoWcdma?) {
         val vo = if (cellInfo != null) {
             val ci = cellInfo.cellIdentity
@@ -382,7 +512,7 @@ class MapsActivity : AppCompatActivity(),
             val cid = ci.cid and 65535
 
             var rsrp = if (css.dbm != CellInfo.UNAVAILABLE) css.dbm else null
-            val bgColor = getColorByMnc(ci.mcc, ci.mnc)
+            val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)
 
             CellInfoViewVO(
                 rsrp,
@@ -412,21 +542,21 @@ class MapsActivity : AppCompatActivity(),
         cellInfoView.invalidate()
     }
 
-    private fun getColorByMnc(mcc: Int, mnc: Int): Int {
+    private fun getColorByMnc(mccString: String?, mncString: String?): Int {
         val context = applicationContext
-        return when (mcc) {
-            440 -> {
-                when (mnc) {
-                    11 -> ContextCompat.getColor(context, R.color.colorRakuten)
-                    50, 51, 52, 53 -> ContextCompat.getColor(context, R.color.colorAu)
-                    10 -> ContextCompat.getColor(context, R.color.colorDocomo)
+        return when (mccString) {
+            "440" -> {
+                when (mncString) {
+                    "11" -> ContextCompat.getColor(context, R.color.colorRakuten)
+                    "50", "51", "52", "53" -> ContextCompat.getColor(context, R.color.colorAu)
+                    "10" -> ContextCompat.getColor(context, R.color.colorDocomo)
                     else -> ContextCompat.getColor(context, R.color.colorSoftbank)
                 }
             }
-            441 -> {
-                when (mnc) {
-                    0 -> ContextCompat.getColor(context, R.color.colorSoftbank)
-                    10 -> ContextCompat.getColor(context, R.color.colorAu)
+            "441" -> {
+                when (mncString) {
+                    "0" -> ContextCompat.getColor(context, R.color.colorSoftbank)
+                    "10" -> ContextCompat.getColor(context, R.color.colorAu)
                     else -> ContextCompat.getColor(context, R.color.colorForeign)
                 }
             }
@@ -437,7 +567,7 @@ class MapsActivity : AppCompatActivity(),
     // 地図の表示位置を現在地に移動する
     private fun moveTo(latlng: LatLng) {
         // 現在地追従モードが基地局連動かどうか
-        val bMode = getPreferenceBoolean("locationMode", true)
+        val bMode = Utils.getPreferenceBoolean("locationMode", true)
 
         if (bMode && myMapManager != null && myMapManager!!.myMapLL != null) {
             // 基地局連動モードで、マイマップから基地局発見の場合
@@ -487,7 +617,9 @@ class MapsActivity : AppCompatActivity(),
 
         recordManager.readLog(logFile)
 
-        recordManager.plotAll(CellId(0))
+        val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
+        val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
+        recordManager.plotAll(CellId(0), bPlotPartner, bPlotMyMapCell)
     }
 
     private fun requestPermission() {
@@ -604,7 +736,7 @@ class MapsActivity : AppCompatActivity(),
 
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialMapPos, initialMapZoom))
 
-        recordManager = RecordManager(mMap)
+        recordManager = RecordManager(mMap, myMapManager)
         readLogAndPutMarker()
 
         val mid = getMyMapMid()
@@ -617,7 +749,7 @@ class MapsActivity : AppCompatActivity(),
     private fun getMyMapMid(): String {
         var mid = ""
         try {
-            val myMapUrl = getPreferenceString("myMapUrl", null)
+            val myMapUrl = Utils.getPreferenceString("myMapUrl", null)
             if (myMapUrl != null) {
                 val myMapUrlTrimmed = myMapUrl.trim()
                 if (myMapUrlTrimmed.length == 33) {
@@ -659,7 +791,7 @@ class MapsActivity : AppCompatActivity(),
     private fun createLocationRequest(): LocationRequest? {
         return LocationRequest.create()?.apply {
 
-            val intervalSecs = getPreferenceInt("refreshInterval", 5)
+            val intervalSecs = Utils.getPreferenceInt("refreshInterval", 5)
 
             interval = intervalSecs * 1000L
             //fastestInterval = 1000
@@ -668,8 +800,8 @@ class MapsActivity : AppCompatActivity(),
     }
 
     override fun onCameraMoveStarted(reason: Int) {
-        println("onCameraMoveStarted")
-        if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+        println("onCameraMoveStarted:$reason")
+        if (reason != GoogleMap.OnCameraMoveStartedListener.REASON_DEVELOPER_ANIMATION) {
             bMoveCurrentLocation = false
         }
         resetLocationTimer()
@@ -677,9 +809,9 @@ class MapsActivity : AppCompatActivity(),
 
     private fun resetLocationTimer() {
         handler.removeCallbacksAndMessages(null)    // もしCallBackがあれば全削除
-        if (getPreferenceBoolean("locationTimer", false)) {
+        if (Utils.getPreferenceBoolean("locationTimer", false)) {
             // 現在地連動タイマースタート
-            val secs = getPreferenceInt("locationTimerSecs", 60)
+            val secs = Utils.getPreferenceInt("locationTimerSecs", 60)
             handler.postDelayed({ onMyLocationButtonClick() }, secs * 1000L)
         }
     }
@@ -721,14 +853,27 @@ class MapsActivity : AppCompatActivity(),
                 "keepScreenOn" -> {
                     setScreenOn()
                 }
-                "locationTimer", "locationTimerSecs"-> {
+                "locationTimer", "locationTimerSecs" -> {
                     resetLocationTimer()
+                }
+                "plotPartner", "plotMyMapCell" -> {
+                    rePlot()
                 }
                 else -> {
                     println("onSharedPreferenceChanged($key)")
                 }
             }
         }
+    }
+
+    private fun rePlot() {
+        if (recordManager.logList.count() == 0) {
+            return
+        }
+        recordManager.clearMarkers()
+        val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
+        val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
+        recordManager.plotAll(CellId(recordManager.logList.last().ci), bPlotPartner, bPlotMyMapCell)
     }
 
     private inner class DownloadMlsTask : AsyncTask<Boolean, Void, String>() {
@@ -777,6 +922,11 @@ class MapsActivity : AppCompatActivity(),
 
             if (result == "OK") {
                 myMapManager?.plotPlacemark()
+                val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
+                if (!bPlotMyMapCell) {
+                    // マイマップが判明したので、消さなきゃいけない場合があるので、リプロットする
+                    rePlot()
+                }
             } else {
                 Toast.makeText(applicationContext, result, Toast.LENGTH_SHORT).show()
             }
@@ -788,7 +938,7 @@ class MapsActivity : AppCompatActivity(),
     inner class PowerConnectionReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             // 設定読み込み
-            val keepScreenOn = getPreferenceString("keepScreenOn", "OFF")
+            val keepScreenOn = Utils.getPreferenceString("keepScreenOn", "OFF")
 
             if (keepScreenOn == "POWER") {
                 // 設定が電源連動だった場合のみ、画面OK設定へ反映
@@ -797,24 +947,9 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-    private fun getPreferenceString(key: String, default: String?): String? {
-        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-        return sharedPreferences.getString(key, default)
-    }
-
-    private fun getPreferenceInt(key: String, default: Int): Int {
-        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-        return sharedPreferences.getInt(key, default)
-    }
-
-    private fun getPreferenceBoolean(key: String, default: Boolean): Boolean {
-        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-        return sharedPreferences.getBoolean(key, default)
-    }
-
     // 常時画面ONの設定をする（設定とAC電源の状態を見て適切に設定する）
     private fun setScreenOn() {
-        val keepScreenOn = getPreferenceString("keepScreenOn", "OFF")
+        val keepScreenOn = Utils.getPreferenceString("keepScreenOn", "OFF")
         when (keepScreenOn) {
             "ON" -> {
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -845,5 +980,3 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 }
-
-

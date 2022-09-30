@@ -15,7 +15,7 @@ import java.lang.Exception
 import kotlin.math.max
 import kotlin.math.min
 
-class RecordManager(mMap: GoogleMap) {
+class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
 
     companion object {
         private const val PLOT_DISTANCE_EQ = 10f
@@ -23,6 +23,8 @@ class RecordManager(mMap: GoogleMap) {
     }
 
     private var mMap = mMap
+    private var myMapManager = myMapManager
+
     var logList = mutableListOf<LogVO>()
     private var markerList = mutableListOf<Marker>()
     private var lLogVo = LogVO()
@@ -44,10 +46,10 @@ class RecordManager(mMap: GoogleMap) {
                     rows[0].toInt(),
                     rows[1].toDouble(),
                     rows[2].toDouble(),
-                    rows[3].toInt(),
-                    rows[4].toInt(),
+                    rows[3],
+                    rows[4],
                     rows[5].toInt(),
-                    rows[6].toInt(),
+                    rows[6].toLong(),
                     rows[7].toInt(),
                     rows[8].toInt(),
                     rows[9].toInt(),
@@ -60,40 +62,49 @@ class RecordManager(mMap: GoogleMap) {
         }
     }
 
-    private fun clearMarkers() {
+    fun clearMarkers() {
         for (marker in markerList) {
             marker.remove()
         }
+        markerList.clear()
     }
 
-    fun plotAll(ci: CellId) {
+    fun plotAll(ci: CellId, bPlotPartner: Boolean, bPlotMyMapCell: Boolean) {
         nowCi = ci
 
         for (logVO in logList) {
-            val ci = CellId(logVO.ci)
-            val bEqualBs = nowCi.equalBs(ci)
-            plot(logVO, ci, bEqualBs)
+            if (!bPlotMyMapCell && myMapManager.contains(logVO.ci)){
+                continue
+            }
+            if (bPlotPartner || logVO.mncString == "11") {
+                val ci = CellId(logVO.ci)
+                val bEqualBs = nowCi.equalBs(ci)
+                plot(logVO, ci, bEqualBs)
+            }
         }
     }
 
-    fun plotAndLog(logVO: LogVO) {
+    fun plotAndLog(logVO: LogVO, bPlotPartner: Boolean, bPlotMyMapCell: Boolean) {
         val ci = CellId(logVO.ci)
         val bEqualBs = nowCi.equalBs(ci)
 
-        if ( bEqualBs ) {
-            plot(logVO, ci, bEqualBs)
-            logList.add(logVO)
-        }
-        else {
-            logList.add(logVO)
+        if (bEqualBs) {
+            if (bPlotPartner || logVO.mncString == "11") {
+                if (bPlotMyMapCell || !myMapManager.contains(logVO.ci)){
+                    plot(logVO, ci, bEqualBs)
+                }
+                logList.add(logVO)
+            }
+        } else {
             clearMarkers()
-            plotAll(ci)
+            logList.add(logVO)
+            plotAll(ci, bPlotPartner, bPlotMyMapCell)
         }
     }
 
-    fun writeCsvLog(logVO: LogVO, logFile:File) {
+    fun writeCsvLog(logVO: LogVO, logFile: File) {
         val csvLine =
-            "${logVO.epoch},${logVO.lat},${logVO.lng},${logVO.mcc},${logVO.mnc},${logVO.tac},${logVO.ci},${logVO.rsrp},${logVO.bw},${logVO.ta}\n"
+            "${logVO.epoch},${logVO.lat},${logVO.lng},${logVO.mccString},${logVO.mncString},${logVO.tac},${logVO.ci},${logVO.rsrp},${logVO.bw},${logVO.ta}\n"
         csvList.add(csvLine)
 
         val csvCacheCount = 100
@@ -111,7 +122,7 @@ class RecordManager(mMap: GoogleMap) {
 
     }
 
-    private fun needPlot(logVO: LogVO, bEqualBs:Boolean):Boolean {
+    private fun needPlot(logVO: LogVO, bEqualBs: Boolean): Boolean {
         var bPlot = false
         if (lLogVo.ci != logVO.ci) {
             // 違うセルならプロット
@@ -128,7 +139,7 @@ class RecordManager(mMap: GoogleMap) {
     }
 
     // プロットする。但し、前回と近い場合はプロットしない。
-    private fun plot(logVO: LogVO, ci: CellId, bEqualBs:Boolean) {
+    private fun plot(logVO: LogVO, ci: CellId, bEqualBs: Boolean) {
         val bPlot = needPlot(logVO, bEqualBs)
         if (bPlot) {
             lLogVo = logVO.copy()
@@ -137,7 +148,7 @@ class RecordManager(mMap: GoogleMap) {
     }
 
     // プロットする。実装部。
-    private fun plotImpl(logVO: LogVO, ci: CellId, bEqualBs:Boolean) {
+    private fun plotImpl(logVO: LogVO, ci: CellId, bEqualBs: Boolean) {
         val latlng = LatLng(logVO.lat, logVO.lng)
 
         val icon = BitmapDescriptorFactory.fromBitmap(createBitmap(logVO.rsrp, ci.sector3, logVO.ta, bEqualBs))
@@ -149,6 +160,7 @@ class RecordManager(mMap: GoogleMap) {
             .title(title)
             .snippet("RSRP:${logVO.rsrp}")
             .icon(icon)
+            .zIndex((if (bEqualBs) 3999f else 1999f) - logVO.ta)
         val marker: Marker = mMap.addMarker(markerOptions)
         markerList.add(marker)
     }

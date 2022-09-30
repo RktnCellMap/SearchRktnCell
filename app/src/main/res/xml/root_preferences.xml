@@ -52,6 +52,29 @@
             app:useSimpleSummaryProvider="true"
     />
 
+    <SwitchPreference
+            app:key="displayCellName"
+            app:title="マイマップで認識した基地局の名前"
+            android:summaryOn="表示する"
+            android:summaryOff="表示しない"
+            android:defaultValue="true"
+    />
+    <SwitchPreference
+            app:key="plotMyMapCell"
+            app:title="マイマップで認識した基地局の軌跡"
+            android:summaryOn="プロットする"
+            android:summaryOff="プロットしない"
+            android:defaultValue="true"
+    />
+
+    <SwitchPreference
+            app:key="plotPartner"
+            app:title="パートナーエリアの軌跡"
+            android:summaryOn="プロットする"
+            android:summaryOff="プロットしない"
+            android:defaultValue="false"
+    />
+
     <Preference
             app:key="version"
             app:title="@string/version_title"

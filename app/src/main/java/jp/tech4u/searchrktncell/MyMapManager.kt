@@ -22,7 +22,7 @@ class MyMapManager() {
     private var kmlParser = KmlParser()
 
     private var markerList = mutableListOf<Marker>()
-    private val eciMap = mutableMapOf<Int, KmlParser.Placemark>()
+    private val eciMap = mutableMapOf<Long, KmlParser.Placemark>()
 
     private lateinit var extDir: Path
     private var locLine: Polyline? = null    // 基地局-現在地の線
@@ -127,6 +127,7 @@ class MyMapManager() {
                 MarkerOptions()
                     .position(placemark.ll)
                     .title(placemark.name)
+                    .zIndex(4000f)
             if (placemark.snippet != null && placemark.snippet != "" ) markerOptions.snippet(placemark.snippet )
 
             if (kmlStyle?.href != null) {
@@ -154,7 +155,7 @@ class MyMapManager() {
         return BitmapFactory.decodeFile(path)
     }
 
-    fun drawLine(latlng: LatLng, cellid: Int, mMap: GoogleMap): Boolean {
+    fun drawLine(latlng: LatLng, cellid: Long, mMap: GoogleMap): Boolean {
 
         if (locLine != null) {
             locLine!!.remove()
@@ -163,7 +164,13 @@ class MyMapManager() {
 
         if (eciMap.containsKey(cellid)) {
             val placemark = eciMap[cellid]!!
-            myMapLL = placemark.ll
+            myMapLL = placemark.ll  // nullの場合もあり、かも。無いと思うけど。
+        }
+        else {
+            myMapLL = null
+        }
+
+        if (myMapLL != null) {
             val context = MapsActivity.getInstance()
             locLine = mMap.addPolyline(
                 PolylineOptions()
@@ -172,8 +179,20 @@ class MyMapManager() {
             )
             return true
         }
-        myMapLL = null
         return false
+    }
+
+    fun getName(cellid: Long) : String {
+        return if (eciMap.containsKey(cellid)) {
+            val placemark = eciMap[cellid]!!
+            placemark.name
+        } else {
+            ""
+        }
+    }
+
+    fun contains(cellid: Long) : Boolean {
+        return eciMap.containsKey(cellid)
     }
 
     private inner class PowerConnectionReceiver : BroadcastReceiver() {

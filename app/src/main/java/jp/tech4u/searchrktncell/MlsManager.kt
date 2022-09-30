@@ -23,7 +23,7 @@ class MlsManager {
 
     private var mlsLL: LatLng? = null           // 掴んでいる基地局の位置（別セクタ・仮セクタの場合もアリ）
     var foundMlsBounds: LatLngBounds? = null    // 基地局3セクタが収まる矩形
-    private var lastCell = -1                   // 前回掴んでいた基地局ID
+    private var lastCell = -1L                  // 前回掴んでいた基地局ID
 
     companion object {
         private const val PATTERN_DASH_LENGTH_PX = 20f
@@ -108,7 +108,7 @@ class MlsManager {
     }
 
     // MLSのセルの三角形などと、それへの直線を描画する
-    fun drawMlsCells(latlng: LatLng, cellid: Int, mMap: GoogleMap) {
+    fun drawMlsCells(latlng: LatLng, cellid: Long, mMap: GoogleMap) {
         if (enbMap == null) return
 
         val context = MapsActivity.getInstance()
@@ -141,6 +141,7 @@ class MlsManager {
                                 .position(ll)
                                 .title("${mlsCi.eNB}-${mlsCi.sector}")
                                 .icon(BitmapDescriptorFactory.defaultMarker(color))
+                                .zIndex(4000f)
                         )
                         mlsMarker = marker
                         mlsLL = ll
@@ -148,7 +149,7 @@ class MlsManager {
 
                     }
                     3 -> {
-                        // 2セクタ判明→三角形を描く
+                        // 3セクタ判明→三角形を描く
                         val llBuilder = LatLngBounds.Builder()
                         val polyOpt = PolygonOptions()
                             .strokeColor(ContextCompat.getColor(context, R.color.colorMlsStroke))

@@ -5,7 +5,7 @@
               android:layout_height="match_parent"
               android:orientation="vertical">
     <jp.tech4u.searchrktncell.CellInfoView
-            android:background="#ccc"
+            android:background="@color/colorForeign"
             android:layout_width="match_parent"
             android:layout_height="100dp"
             android:id="@+id/cellInfoView"
@@ -13,11 +13,29 @@
             app:stringL2="PCI: -  BW: -"
             app:stringR="TA: -"
     />
-    <fragment xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:tools="http://schemas.android.com/tools"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:id="@+id/map"
-              tools:context=".MapsActivity"
-              android:name="com.google.android.gms.maps.SupportMapFragment"/>
+    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                    xmlns:app="http://schemas.android.com/apk/res-auto"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:theme="@style/ThemeOverlay.AppCompat.Dark">
+        <fragment xmlns:android="http://schemas.android.com/apk/res/android"
+                  xmlns:tools="http://schemas.android.com/tools"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:id="@+id/map"
+                  tools:context=".MapsActivity"
+                  android:name="com.google.android.gms.maps.SupportMapFragment"/>
+        <TextView
+                android:id="@+id/txtCellName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="10dp"
+                android:paddingVertical="2dp"
+                android:paddingHorizontal="8dp"
+                android:textSize="20dp"
+                android:gravity="center_horizontal"
+                android:layout_centerHorizontal="true"
+                android:background="#00000000"
+                android:textColor="#222222" />
+    </RelativeLayout>
 </LinearLayout>
