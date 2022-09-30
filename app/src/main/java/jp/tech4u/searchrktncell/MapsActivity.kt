@@ -6,6 +6,8 @@ import android.content.*
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.graphics.Matrix
+import android.graphics.Point
 import android.graphics.Typeface
 import android.graphics.drawable.Animatable
 import android.location.Location
@@ -31,7 +33,6 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.ActivityCompat
@@ -45,6 +46,7 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
+import com.google.maps.android.SphericalUtil
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
 import jp.tech4u.searchrktncell.data.DebugVO
@@ -58,8 +60,8 @@ import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParserException
 import java.io.File
 import java.io.IOException
-import kotlin.math.floor
-
+import java.io.InputStream
+import kotlin.math.*
 
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
@@ -71,6 +73,7 @@ class MapsActivity : AppCompatActivity(),
     SharedPreferences.OnSharedPreferenceChangeListener {
 
     companion object {
+        private const val LOGTAG_CELLINFO = "CELLINFO"
         private const val MLS_JSON_FILENAME = "mls44011.json"
         private const val MLS_JSON_URL = "https://cellmap.rukihena.com/$MLS_JSON_FILENAME"
 
@@ -78,6 +81,8 @@ class MapsActivity : AppCompatActivity(),
         private const val INITIAL_MAP_LAT = 36.0
         private const val INITIAL_MAP_LNG = 140.0
         private const val INITIAL_MAP_ZOOM = 7f
+
+        private const val ZOOM_PADDING_DP = 40
 
         private lateinit var instance: MapsActivity
 
@@ -102,8 +107,11 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-    // 現在地連動タイマー用
-    private val enableLocationHandler = Handler(Looper.getMainLooper())
+    // 現在地連動予約時刻
+    private var enableLocationEpoch = 0L
+
+    // ダミー通信予約時刻
+    private var dummyCommunicationEpoch = 0L
 
     // UI部品
     private lateinit var cellInfoView: CellInfoView
@@ -157,6 +165,11 @@ class MapsActivity : AppCompatActivity(),
     // 最後に得た現在地（PhoneStateListenerで参照）
     private var lastLocation: Location? = null
 
+    private var retryLocation: Boolean = false
+
+    // 圏外／在圏
+    private var isConnected: Boolean = false
+
     // 現在地追従するかのフラグ
     private var bMoveCurrentLocation = true
 
@@ -165,11 +178,9 @@ class MapsActivity : AppCompatActivity(),
 
     private var destinationMarker: Marker? = null   // 簡易ナビの目的地。nullでなければナビが有効
     private var destinationLine: Polyline? = null
-    private val distanceResult = FloatArray(3)
 
     // デバッグ用
     private var bPress = false
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -541,20 +552,20 @@ class MapsActivity : AppCompatActivity(),
             cellInfoUpdateRequestCallback = object : CellInfoCallback() {
                 override fun onCellInfo(cellInfo: List<CellInfo>) {
                     if (cellInfo == null) {
-                        Log.d(localClassName,"onCellInfo(): Null reported")
+                        Log.d(LOGTAG_CELLINFO,"onCellInfo(): Null reported")
                         return
                     } else {
-                        //Log.d(localClassName,"onCellInfo(): Cell info update result: $cellInfo")
+                        Log.d(LOGTAG_CELLINFO,"onCellInfo()")
                     }
                     try {
                         onCellUpdate(cellInfo)
                     } catch (ex: SecurityException) {
-                        Log.e(localClassName, "onCellInfo(): Coarse location or phone permission is denied")
+                        Log.e(LOGTAG_CELLINFO, "onCellInfo(): Coarse location or phone permission is denied")
                     }
                 }
 
                 override fun onError(errorCode: Int, detail: Throwable?) {
-                    Log.e(localClassName, detail.toString())
+                    Log.e(LOGTAG_CELLINFO, detail.toString())
                 }
             }
         }
@@ -583,13 +594,11 @@ class MapsActivity : AppCompatActivity(),
                     if (ActivityCompat.checkSelfPermission(
                             applicationContext,
                             Manifest.permission.ACCESS_FINE_LOCATION
-                        ) != PackageManager.PERMISSION_GRANTED
+                        ) == PackageManager.PERMISSION_GRANTED
                     ) {
-                        return
+                        telephonyManager.requestCellInfoUpdate(applicationContext.mainExecutor, cellInfoUpdateRequestCallback)
                     }
-                    telephonyManager.requestCellInfoUpdate(applicationContext.getMainExecutor(), cellInfoUpdateRequestCallback)
                 }
-
                 onLocation(location)
             }
         }
@@ -597,14 +606,14 @@ class MapsActivity : AppCompatActivity(),
         phoneStateListener = object : PhoneStateListener() {
             override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>?) {
                 super.onCellInfoChanged(cellInfo)
-                Log.i(localClassName, "onCellInfoChanged")
+                Log.d(LOGTAG_CELLINFO, "onCellInfoChanged")
                 cellInfo ?: return  // SIMを抜いたときはnullなので
                 onCellUpdate(cellInfo)
             }
 
             override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
                 super.onSignalStrengthsChanged(signalStrength)
-                Log.d(localClassName, "onSignalStrengthsChanged")
+                Log.d(LOGTAG_CELLINFO, "onSignalStrengthsChanged")
                 if (ActivityCompat.checkSelfPermission(
                         MyApplication.getInstance(),
                         Manifest.permission.ACCESS_FINE_LOCATION
@@ -633,7 +642,7 @@ class MapsActivity : AppCompatActivity(),
     private fun onLocation(location: Location) {
         val latlng = LatLng(location.latitude, location.longitude)
         Log.v(
-            localClassName,
+            LOGTAG_CELLINFO,
             "onLocation ${latlng.latitude} , ${latlng.longitude} (${location.provider}, ${location.accuracy})"
         )
 
@@ -652,6 +661,29 @@ class MapsActivity : AppCompatActivity(),
         }
         val cellInfoAry = telephonyManager.allCellInfo
         onDataEvent(cellInfoAry, location)
+    }
+
+    // ダミー通信
+    private fun dummyCommunication() {
+
+        if (!isConnected) return
+        val dummyCommunicationEnable = Utils.getPreferenceBoolean("dummyCommunicationEnable", true)
+        if (!dummyCommunicationEnable) return
+
+        scope.launch {
+            try {
+                val dummyCommunicationUrl = Utils.getPreferenceString(
+                    "dummyCommunicationUrl",
+                    "https://cellmap.rukihena.com/dummy.html"
+                )
+                val con = Utils.getHttpURLConnectionFromUrlString(dummyCommunicationUrl!!)
+                val inputStream: InputStream? = con.inputStream
+                if (inputStream != null) {
+                    inputStream.close()
+                }
+            } catch (e: IOException) {
+            }
+        }
     }
 
     // onLocation と PhoneStateListenerのイベントから呼ばれる
@@ -693,6 +725,12 @@ class MapsActivity : AppCompatActivity(),
                 app.recordManager.plotAndLog(mMap, lvo)
 
                 latlng = LatLng(lvo.lat, lvo.lng)
+
+                if ( lvo.debug!=null) {
+                    pLocation.bearing = lvo.debug!!.bearing
+                    pLocation.bearingAccuracyDegrees = lvo.debug!!.bearingAccuracyDegrees
+                    pLocation.speed = lvo.debug!!.speed
+                }
             } else {
                 latlng = LatLng(pLocation.latitude, pLocation.longitude)
             }
@@ -708,6 +746,7 @@ class MapsActivity : AppCompatActivity(),
 
                 // CellInfoView 反映
                 cellInfoView.drawCellInfoView(cellInfo)
+                isConnected = true
 
                 // データ準備
                 val logVO = LogVO(
@@ -729,6 +768,21 @@ class MapsActivity : AppCompatActivity(),
             }
         }
 
+        //// 定期実行モノ
+        val epoch = System.currentTimeMillis()
+        // 現在地連動
+        if ( enableLocationEpoch!=0L && enableLocationEpoch < epoch ) {
+            Log.d("CELLINFO", "enableLocation()")
+            enableLocationEpoch = 0L
+            enableLocation()
+        }
+        // ダミー通信(TA取得用)
+        if ( dummyCommunicationEpoch < epoch ) {
+            Log.d("CELLINFO", "dummyCommunication()")
+            dummyCommunicationEpoch = epoch + 5 * 1000
+            dummyCommunication()
+        }
+
         var lastLogVO: LogVO? = null
         for (logVO in listLogVoNow) {
             lastLogVO = logVO
@@ -743,6 +797,7 @@ class MapsActivity : AppCompatActivity(),
         // 圏外の場合は、上のビューに圏外表示
         if (lastLogVO == null) {
             cellInfoView.drawCellInfoView(null)
+            isConnected = false
             app.myMapManager.removeLocLine()
             app.mlsManager.removeMls()
         } else {
@@ -774,16 +829,17 @@ class MapsActivity : AppCompatActivity(),
                     .color(ContextCompat.getColor(this, R.color.colorDestinationLine))
                     .pattern(pattern)
             )
-            Location.distanceBetween(p1.latitude, p1.longitude, latlng.latitude, latlng.longitude, distanceResult)
-            val distanceStr = if (distanceResult[0] < 1000) {
-                (floor(distanceResult[0] / 10) * 10).toInt().toString() + "m"
+            val distance = SphericalUtil.computeDistanceBetween(p1,latlng);
+            val distanceStr = if (distance < 1000) {
+                (floor(distance / 10) * 10).toInt().toString() + "m"
             } else {
-                (floor(distanceResult[0] / 100) / 10).toString() + "km"
+                (floor(distance / 100) / 10).toString() + "km"
             }
             txtDestination.text = "目的地まで $distanceStr"
         }
 
         displayCellName(lastLogVO)
+        //Log.d(LOGTAG_CELLINFO,"onDataEvent(): CI:${lastLogVO?.ci} TA:${lastLogVO?.ta} $cellInfoAry")
 
         // 地図表示位置反映
         if (bMoveCurrentLocation) {
@@ -871,7 +927,7 @@ class MapsActivity : AppCompatActivity(),
         txtCellInfoEci.visibility = if (txtCellInfoEci.text == "") View.INVISIBLE else View.VISIBLE
     }
 
-    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
         Log.i(localClassName, "onCreateOptionsMenu")
         val inflater = menuInflater
         inflater.inflate(R.menu.main, menu)
@@ -927,37 +983,164 @@ class MapsActivity : AppCompatActivity(),
 
         // 現在地追従モードが基地局連動かどうか
         val bMode = Utils.getPreferenceBoolean("locationMode", true)
+        // ヘディングアップすべきかどうか
+        val headingUp = Utils.getPreferenceBoolean("headingUp", false)
+        val needHeadingUp = when {
+            headingUp -> {
+                val headingUpSpeed = Utils.getPreferenceInt("headingUpSpeed", 5)
+                val headingUpBearingAccuracyDegrees =
+                    Utils.getPreferenceInt("headingUpBearingAccuracyDegrees", 5)
+                (bearingAccuracyDegrees != 0f && bearingAccuracyDegrees < headingUpBearingAccuracyDegrees || headingUpSpeed <= speed * 3.6f)
+            }
+            else -> false
+        }
 
-        var llArea: LatLngArea? = null
+        var lls = mutableListOf<LatLng>()
         if (bMode && app.myMapManager.myMapLL != null) {
             // 基地局連動モードで、マイマップから基地局発見の場合
-            llArea = LatLngArea(latlng)
-            llArea.include(app.myMapManager.myMapLL!!)
-        } else if (bMode && app.mlsManager.foundMlsBounds != null) {
+            lls.add(app.myMapManager.myMapLL!!)
+        } else if (bMode && app.mlsManager.foundMlsLLs != null) {
             // 基地局連動モードで、（マイマップから基地局発見できず、）MLSから基地局発見の場合
-            llArea = LatLngArea(latlng)
-            llArea.include(app.mlsManager.foundMlsBounds!!.northeast)
-            llArea.include(app.mlsManager.foundMlsBounds!!.southwest)
-        }
-
-        if (llArea != null) {
-            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(llArea.build(), 100), cameraMoveDurationMs, null)
-        } else {
-            val headingUp = Utils.getPreferenceBoolean("headingUp", false)
-            val headingUpSpeed = Utils.getPreferenceInt("headingUpSpeed", 5)
-            val headingUpBearingAccuracyDegrees = Utils.getPreferenceInt("headingUpBearingAccuracyDegrees", 5)
-
-            if (headingUp && (bearingAccuracyDegrees != 0f && bearingAccuracyDegrees < headingUpBearingAccuracyDegrees || headingUpSpeed <= speed * 3.6f)) {
-                val cameraPos = CameraPosition.Builder()
-                    .target(latlng)
-                    .zoom(mMap.cameraPosition.zoom)
-                    .bearing(bearing)
-                    .build()
-                mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPos), cameraMoveDurationMs, null)
-            } else {
-                mMap.animateCamera(CameraUpdateFactory.newLatLng(latlng), cameraMoveDurationMs, null)
+            app.mlsManager.foundMlsLLs!!.forEach {
+                lls.add(it)
             }
         }
+
+        if (lls.count() != 0) {
+            if (headingUp) {
+                // 各点が見えるようにヘディングアップしつつズーム
+                val newBearing = if (needHeadingUp) bearing else mMap.cameraPosition.bearing
+                cameraMoveMultiPointHu(latlng, lls, newBearing)
+            } else {
+                // 各点が見えるように矩形ズーム
+                cameraMoveMultiPointNu(latlng, lls)
+            }
+        } else {
+            if (needHeadingUp) {
+                // 移動と回転
+                cameraMoveParam(latlng, mMap.cameraPosition.zoom, bearing)
+            } else {
+                // ただの移動
+                cameraMoveLatLng(latlng)
+            }
+        }
+    }
+
+    private fun cameraMoveLatLng(ll:LatLng) {
+        mMap.animateCamera(
+            CameraUpdateFactory.newLatLng(ll),
+            cameraMoveDurationMs,
+            null
+        )
+    }
+
+    private fun cameraMoveMultiPointNu(ll:LatLng, lls: List<LatLng>) {
+        val llArea = LatLngArea(ll)
+        lls.forEach {
+            llArea.include(it)
+        }
+        val paddingPx = (ZOOM_PADDING_DP * resources.displayMetrics.density).toInt()
+        mMap.animateCamera(
+            CameraUpdateFactory.newLatLngBounds(llArea.build(), paddingPx),
+            cameraMoveDurationMs,
+            null
+        )
+    }
+
+    private fun addLlToPts(pts:MutableList<Float>, ll:LatLng) {
+        val p = mMap.projection.toScreenLocation(ll)
+        pts.add(p.x.toFloat())
+        pts.add(p.y.toFloat())
+    }
+
+    /*
+    private var markerT:Marker?=null
+    private var markerR:Marker?=null
+    private var markerB:Marker?=null
+    private var markerL:Marker?=null
+     */
+    private fun cameraMoveMultiPointHu(ll:LatLng, lls: List<LatLng>, bearing:Float) {
+        val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
+        val mapW = mapFragment.requireView().width
+        val mapH = mapFragment.requireView().height
+        val minDistance: Double =
+            Utils.getPreferenceString("minDistance", "300")?.toDouble() ?: 300.0
+        val maxDistance: Double =
+            Utils.getPreferenceString("maxDistance", "2000")?.toDouble() ?: 2000.0
+
+        val pts = mutableListOf<Float>()
+        addLlToPts(pts, ll)
+
+        // 拡大しすぎないよう、現在地から一定距離の点を追加
+        val llT = SphericalUtil.computeOffset(ll, minDistance, bearing.toDouble())
+        val llR = SphericalUtil.computeOffset(ll, minDistance, bearing + 90.0)
+        val llB = SphericalUtil.computeOffset(ll, minDistance, bearing + 180.0)
+        val llL = SphericalUtil.computeOffset(ll, minDistance, bearing + 270.0)
+        addLlToPts(pts, llT)
+        addLlToPts(pts, llR)
+        addLlToPts(pts, llB)
+        addLlToPts(pts, llL)
+        /*
+        if (markerT == null) {
+            markerT = mMap.addMarker(MarkerOptions().position(llT))
+            markerR = mMap.addMarker(MarkerOptions().position(llR))
+            markerB = mMap.addMarker(MarkerOptions().position(llB))
+            markerL = mMap.addMarker(MarkerOptions().position(llL))
+        } else {
+            markerT?.position = llT
+            markerR?.position = llR
+            markerB?.position = llB
+            markerL?.position = llL
+        }
+         */
+        lls.forEach {
+            val distance = SphericalUtil.computeDistanceBetween(ll, it)
+            val p = if (maxDistance < distance) {
+                val heading = SphericalUtil.computeHeading(ll, it)
+                SphericalUtil.computeOffset(ll, maxDistance, heading)
+            } else {
+                it
+            }
+            addLlToPts(pts, p)
+        }
+        val ptsArray = pts.toFloatArray()
+
+        val matrix = Matrix()
+        val dTheta = mMap.cameraPosition.bearing - bearing
+        matrix.setRotate(dTheta, (mapW / 2).toFloat(), (mapH / 2).toFloat())
+        matrix.mapPoints(ptsArray)
+
+        var l = ptsArray[0]
+        var r = ptsArray[0]
+        var t = ptsArray[1]
+        var b = ptsArray[1]
+        for (i in 2 until ptsArray.size step 2) {
+            l = min(l, ptsArray[i + 0])
+            r = max(r, ptsArray[i + 0])
+            t = min(t, ptsArray[i + 1])
+            b = max(b, ptsArray[i + 1])
+        }
+
+        val paddingPx = (ZOOM_PADDING_DP * resources.displayMetrics.density).toInt()
+        val w = r - l + paddingPx * 2
+        val h = b - t + paddingPx * 4
+        val scaleW = w / mapW
+        val scaleH = h / mapH
+        val scale = max(scaleW, scaleH)
+        val zoom = mMap.cameraPosition.zoom - log2(scale)
+        val centerP = Point(((l + r) / 2).toInt(), ((t + b) / 2).toInt())
+        val centerLL = mMap.projection.fromScreenLocation(centerP)
+        //Log.i("CELLINFO", "centerLL:$centerLL, zoom:$zoom, bearing:$bearing, scale:$scale")
+        cameraMoveParam(centerLL, zoom, bearing)
+    }
+
+    private fun cameraMoveParam(ll:LatLng, zoom:Float, bearing:Float) {
+        val cameraPos = CameraPosition.Builder().target(ll).zoom(zoom).bearing(bearing).build()
+        mMap.animateCamera(
+            CameraUpdateFactory.newCameraPosition(cameraPos),
+            cameraMoveDurationMs,
+            null
+        )
     }
 
     private fun readLogAndPutMarker() {
@@ -1218,11 +1401,10 @@ class MapsActivity : AppCompatActivity(),
     }
 
     private fun resetLocationTimer() {
-        enableLocationHandler.removeCallbacksAndMessages(null)    // もしCallBackがあれば削除
         if (Utils.getPreferenceBoolean("locationTimer", false)) {
             // 現在地連動タイマースタート
             val secs = Utils.getPreferenceInt("locationTimerSecs", 60)
-            enableLocationHandler.postDelayed({ enableLocation() }, secs * 1000L)
+            enableLocationEpoch = System.currentTimeMillis() + secs * 1000L
         }
     }
 
@@ -1254,13 +1436,17 @@ class MapsActivity : AppCompatActivity(),
         fusedLocationClient.lastLocation.addOnSuccessListener {
             // 前回の現在地
             if (it != null) {
+                retryLocation = false
                 Log.d(localClassName, "lastLocation" + it.provider)
                 val latlng = LatLng(it.latitude, it.longitude)
                 moveTo(latlng)
             } else {
-                // 特定できなかったので、もう一度呼ぶ
-                Log.d(localClassName, "ONE MORE enableLocation()")
-                enableLocation()
+                if ( !retryLocation ) {
+                    // 特定できなかったので、もう一度呼ぶ
+                    retryLocation = true
+                    Log.d(localClassName, "ONE MORE enableLocation()")
+                    enableLocation()
+                }
             }
         }
 

@@ -43,6 +43,7 @@
         <activity
                 android:name=".MapsActivity"
                 android:label="@string/title_activity_maps"
+                android:exported="true"
                 android:configChanges="keyboardHidden|screenSize|orientation|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

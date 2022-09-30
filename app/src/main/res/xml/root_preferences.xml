@@ -29,11 +29,17 @@
     />
 
     <EditTextPreference
+            app:key="minDistance"
+            app:title="拡大するときに最小限見える半径[m]"
+            android:defaultValue="300"
+            app:useSimpleSummaryProvider="true"
+            />
+    <EditTextPreference
             app:key="maxDistance"
-            app:title="拡縮で広域にするときの最大距離[m]"
+            app:title="広域にするときの最大距離[m]"
             android:defaultValue="2000"
             app:useSimpleSummaryProvider="true"
-    />
+            />
 
     <SwitchPreference
             app:key="locationTimer"
@@ -221,6 +227,21 @@
             android:defaultValue="default"
             app:useSimpleSummaryProvider="true"
     />
+
+    <EditTextPreference
+            app:key="dummyCommunicationUrl"
+            app:title="ダミー通信用のURL"
+            app:useSimpleSummaryProvider="true"
+            android:defaultValue="https://cellmap.rukihena.com/dummy.html"
+            />
+    <SwitchPreference
+            app:key="dummyCommunicationEnable"
+            app:title="ダミー通信を行う"
+            android:summary="TA表示のためには通信していることが必要です"
+            android:summaryOn="有効"
+            android:summaryOff="無効"
+            android:defaultValue="true"
+            />
 
     <Preference
             app:key="version"

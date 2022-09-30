@@ -9,6 +9,7 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
+import com.google.maps.android.SphericalUtil
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.LogVO
 import jp.tech4u.searchrktncell.util.Utils
@@ -29,8 +30,6 @@ class RecordManager {
     private var nowCi = CellId(0)
 
     private var csvList = mutableListOf<String>()
-
-    private val distanceResult = FloatArray(3)
 
     var bPlotPartner = true
     var bPlotMyMapCell = true
@@ -152,9 +151,10 @@ class RecordManager {
             bPlot = true
         } else {
             // 同じセルなら、一定距離離れたときにプロット
-            Location.distanceBetween(logVO.lat, logVO.lng, lLogVo.lat, lLogVo.lng, distanceResult)
+            val distance =
+                SphericalUtil.computeDistanceBetween(LatLng(logVO.lat, logVO.lng), LatLng(lLogVo.lat, lLogVo.lng))
             val diffDist = if (bEqualBs) PLOT_DISTANCE_EQ else PLOT_DISTANCE_NE
-            if (diffDist < distanceResult[0]) {
+            if (diffDist < distance) {
                 bPlot = true
             }
         }

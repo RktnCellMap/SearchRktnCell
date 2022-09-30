@@ -3,6 +3,7 @@ package jp.tech4u.searchrktncell
 import android.location.Location
 import android.util.Log
 import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.SphericalUtil
 import jp.tech4u.searchrktncell.data.LogVO
 import jp.tech4u.searchrktncell.util.Utils
 import java.io.File
@@ -21,7 +22,8 @@ class DebugCellInfo {
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210209_qurune.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210209_qurune_tac.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210907_kiyose.csv"
-        //private const val DEBUG_LOAD_LOG_FILENAME = "log_tokorozawa_ohkawakagu.csv"
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_gps_360.csv"
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20211206_Mi11_f.csv"
         private const val DEBUG_LOAD_LOG_FILENAME = ""    // リリースはコレ
 
         private const val DEBUG_TRACE_LOG_START_INDEX = 0
@@ -37,7 +39,6 @@ class DebugCellInfo {
     private var logList = mutableListOf<LogVO>()
     private var lastll = LatLng(0.0, 0.0)
     private var lastCid = 0L
-    private val distanceResult = FloatArray(3)
 
     fun init() {
         if (DEBUG_LOAD_LOG_FILENAME != "") {
@@ -89,9 +90,9 @@ class DebugCellInfo {
                 debugCellIndex = i
                 break
             }
-
-            Location.distanceBetween(logList[i].lat, logList[i].lng, lastll.latitude, lastll.longitude, distanceResult)
-            if (DISTANCE < distanceResult[0]) {
+            val distance =
+                SphericalUtil.computeDistanceBetween(LatLng(logList[i].lat, logList[i].lng), lastll)
+            if (DISTANCE < distance) {
                 // 一定距離以上進んだら描画
                 debugCellIndex = i
                 break

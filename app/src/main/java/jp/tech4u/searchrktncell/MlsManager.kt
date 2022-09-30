@@ -40,7 +40,7 @@ class MlsManager {
     private var mlsLocLine: Polyline? = null    // 基地局-現在地の線
 
     private var mlsLL: LatLng? = null           // 掴んでいる基地局の位置（別セクタ・仮セクタの場合もアリ）
-    var foundMlsBounds: LatLngBounds? = null    // 基地局3セクタが収まる矩形
+    var foundMlsLLs: List<LatLng>? = null       // 基地局3セクタの緯度経度リスト
     private var lastCell = -1L                  // 前回掴んでいた基地局ID
 
     fun readRadioInfo() {
@@ -132,7 +132,7 @@ class MlsManager {
         mlsLocLine = null
 
         mlsLL = null
-        foundMlsBounds = null
+        foundMlsLLs = null
         lastCell = -1L
     }
 
@@ -239,7 +239,7 @@ class MlsManager {
 
                 if (brpList.count() == 1 && mlsList.count() == 1) {
                     // 電測最良データが1個あるだけの場合は、範囲ズームをやらないようにする
-                    foundMlsBounds = null
+                    foundMlsLLs = null
                 }
             }
         } else {
@@ -279,7 +279,7 @@ class MlsManager {
         )
         mlsMarker = marker
         mlsLL = ll
-        foundMlsBounds = LatLngBounds(ll, ll)
+        foundMlsLLs = listOf(ll)
     }
 
     // 2セクタ判明→もう一セクタの位置を推測して正三角形を描く
@@ -317,9 +317,7 @@ class MlsManager {
                 .add(mlsLL0).add(thirdLL).add(mlsLL1)
         )
 
-        val llBuilder = LatLngBounds.Builder()
-        llBuilder.include(mlsLL0).include(mlsLL1).include(thirdLL)
-        foundMlsBounds = llBuilder.build()
+        foundMlsLLs = listOf(mlsLL0,mlsLL1,thirdLL)
 
         for (cellInfo in mlsList) {
             if (cellId.ci == cellInfo.cell) {
@@ -335,20 +333,18 @@ class MlsManager {
     private fun drawMlsCells3(context: Context, cellId: CellId, mlsList: List<MlsCellInfo>) {
         val app = MyApplication.getInstance()
 
-        val llBuilder = LatLngBounds.Builder()
         val polyOpt = PolygonOptions()
             .strokeColor(ContextCompat.getColor(context, R.color.colorMlsStroke))
             .fillColor(ContextCompat.getColor(context, R.color.colorMlsFill))
         for (cellInfo in mlsList) {
             val ll = LatLng(cellInfo.lat.toDouble(), cellInfo.lon.toDouble())
-            llBuilder.include(ll)
             polyOpt.add(ll)
             val mlsCi = CellId(cellInfo.cell)
             if (cellId.sector == mlsCi.sector) {
                 mlsLL = ll
             }
         }
-        foundMlsBounds = llBuilder.build()
+        foundMlsLLs = polyOpt.points.toList()
         mlsPolygon = app.mMap.addPolygon(polyOpt)
     }
 }
