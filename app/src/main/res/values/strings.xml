@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">楽天電測</string>
+    <string name="title_activity_maps">楽天電測【非公式】</string>
+
+    <!-- Menu Title -->
+    <string name="reloadMls_title">MLSリロード</string>
+    <string name="reloadMyMap_title">Googleマイマップリロード</string>
+    <string name="settings_title">設定...</string>
+
+    <!-- Setting Title -->
+    <string name="title_activity_settings">設定</string>
+    <string name="refreshInterval_title">更新間隔</string>
+    <string name="myMapUrl_title">GoogleマイマップURL</string>
+    <string name="version_title">バージョン</string>
+</resources>

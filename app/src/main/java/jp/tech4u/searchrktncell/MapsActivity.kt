@@ -1,0 +1,761 @@
+package jp.tech4u.searchrktncell
+
+import android.Manifest
+import android.content.Intent
+import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.graphics.*
+import android.location.Location
+import android.os.*
+import android.telephony.*
+import android.view.*
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.preference.PreferenceManager
+import com.google.android.gms.location.*
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.OnMapReadyCallback
+import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.*
+import jp.tech4u.searchrktncell.data.CellId
+import jp.tech4u.searchrktncell.data.LogVO
+import jp.tech4u.searchrktncell.setting.SettingsActivity
+import org.xmlpull.v1.XmlPullParserException
+import java.io.File
+import java.io.IOException
+import java.net.URI
+import java.text.SimpleDateFormat
+import java.util.*
+
+
+class MapsActivity : AppCompatActivity(),
+    OnMapReadyCallback,
+    GoogleMap.OnCameraMoveStartedListener,
+    GoogleMap.OnMyLocationButtonClickListener,
+    SharedPreferences.OnSharedPreferenceChangeListener {
+
+    companion object {
+        // デバッグ用ここから
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20201219_higasifushimi.csv"
+        //private const val DEBUG_LOAD_LOG_FILENAME="log_20201219_koganeikouen.csv"
+        private const val DEBUG_LOAD_LOG_FILENAME=""    // リリースはコレ
+
+        //private const val DEBUG_TRACE_LOG = true    // CellInfoViewクリックでログをトレース
+        private const val DEBUG_TRACE_LOG = false    // リリースはコレ
+        private const val DEBUG_TRACE_LOG_START_INDEX = 1623 // ↑がfalseなら関係ない
+        // デバッグ用ここまで
+
+        private const val PERMISSION_REQUEST_CODE = 44011   // なんでもいい
+        private const val MLS_JSON_FILENAME = "mls44011.json"
+        private const val MLS_JSON_URL = "https://cellmap.rukihena.com/$MLS_JSON_FILENAME"
+        private lateinit var instance: MapsActivity
+
+        // 地図表示初期位置
+        private val initialMapPos = LatLng(36.0, 140.0)
+        private const val initialMapZoom = 7f
+
+        // あんまりやりたくないけど、みんなコレどうしてんだろう？
+        fun getInstance(): MapsActivity {
+            return instance
+        }
+    }
+    private var debugCellIndex = if (DEBUG_TRACE_LOG) DEBUG_TRACE_LOG_START_INDEX else -1
+
+    private lateinit var cellInfoView: CellInfoView
+
+    private lateinit var mMap: GoogleMap
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var locationCallback: LocationCallback
+
+    private lateinit var lastLocation: Location
+    private lateinit var recordManager: RecordManager
+    private lateinit var mlsManager: MlsManager
+    private var myMapManager = MyMapManager()
+
+    private var bMoveCurrentLocation = true
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        instance = this
+        setContentView(R.layout.activity_maps)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+
+        cellInfoView = findViewById(R.id.cellInfoView)
+
+        cellInfoView.setOnTouchListener { v, event ->
+            // ... Respond to touch events
+            v.performClick()
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    println("Action was DOWN")
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    println("Action was MOVE")
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    println("Action was UP")
+
+                    if (DEBUG_TRACE_LOG) {
+                        // 現在地、電測地をログからアレする
+                        debug_nextLoc()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    println("Action was CANCEL")
+                    true
+                }
+                MotionEvent.ACTION_OUTSIDE -> {
+                    println("Movement occurred outside bounds of current screen element")
+                    true
+                }
+                else -> super.onTouchEvent(event)
+            }
+        }
+
+        requestPermission()
+
+        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
+        // 訳：SupportMapFragmentを取得し、マップを使用する準備ができたら通知（訳註：onMapReady()）を受け取ります。
+        val mapFragment = supportFragmentManager
+            .findFragmentById(R.id.map) as SupportMapFragment
+        mapFragment.getMapAsync(this)
+
+        DownloadMlsTask().execute(false)
+
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        createLocationCallback()
+    }
+
+    // デバッグ用。
+    private fun debug_nextLoc() {
+        if (recordManager != null) {
+            val lci = if (debugCellIndex < 0) {
+                debugCellIndex++
+                0
+            } else recordManager.logList[debugCellIndex].ci
+
+            while (debugCellIndex < recordManager.logList.size) {
+                if (recordManager.logList[debugCellIndex].ci != lci) break
+                debugCellIndex++
+            }
+
+            if (recordManager.logList.size <= debugCellIndex) {
+                debugCellIndex = 0
+            }
+            println("debugCellIndex:$debugCellIndex")
+        }
+    }
+
+
+
+    //readMyMap
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        println("onCreateOptionsMenu")
+        val inflater = menuInflater
+        inflater.inflate(R.menu.main, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        println("onOptionsItemSelected")
+        println(item)
+
+        when (item.getItemId()) {
+            R.id.reloadMls -> {
+                DownloadMlsTask().execute(true)
+            }
+            R.id.reloadMyMap -> {
+                val mid = getMyMapMid()
+                if (mid != "") {
+                    DownloadMyMapTask().execute(mid as Object, true as Object)
+                }
+                else {
+                    // TODO 未設定の場合の TOAST
+                }
+            }
+            R.id.settings -> {
+                startActivity(Intent(this@MapsActivity, SettingsActivity::class.java))
+            }
+        }
+
+        return true
+    }
+
+    private fun onLocation(location: Location) {
+        val context = applicationContext
+
+        var latlng = LatLng(location.latitude, location.longitude)
+        println("${latlng.latitude} , ${latlng.longitude}")
+
+        if (mMap.cameraPosition.zoom == initialMapZoom) {
+            // 現在地 初回
+            lastLocation = location
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latlng, 15f))
+        }
+
+        val telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+
+        val cellInfoAry = telephonyManager.allCellInfo
+        val listMnc = mutableListOf<Int>()
+        for (cellInfo in cellInfoAry) {
+            if (cellInfo.isRegistered) {
+                if (cellInfo is CellInfoLte) {
+                    listMnc.add(cellInfo.cellIdentity.mnc)
+                } else if (cellInfo is CellInfoWcdma) {
+                    listMnc.add(cellInfo.cellIdentity.mnc)
+                }
+            }
+        }
+
+        // 採用するMNCを決める
+        val activeMnc = when (listMnc.size) {
+            0 -> -1 // 圏外
+            1 -> listMnc[0] // 1個の場合はそれ
+            else -> {
+                // 複数ある場合は、下記優先順位順で
+                when {
+                    listMnc.contains(11) -> 11
+                    listMnc.contains(53) -> 53
+                    listMnc.contains(50) -> 50
+                    else -> listMnc[0]  // 決められない場合は最初に見つかったモノ
+                }
+            }
+        }
+
+        var cellid = 0
+        for (cellInfo in cellInfoAry) {
+            if (!cellInfo.isRegistered) continue
+
+            var logVO: LogVO? = null
+            if (cellInfo is CellInfoLte) {
+                if (cellInfo.cellIdentity.mnc != activeMnc) continue
+                val cid = cellInfo.cellIdentity
+                val css = cellInfo.cellSignalStrength
+                val bw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) cid.bandwidth else CellInfo.UNAVAILABLE
+
+                drawCellInfoView(cellInfo, bw)
+
+                val epoch = System.currentTimeMillis() / 1000
+
+                logVO = LogVO(
+                    epoch.toInt(),
+                    latlng.latitude, latlng.longitude,
+                    cid.mcc, cid.mnc,
+                    cid.tac, cid.ci, css.rsrp, bw, css.timingAdvance
+                )
+                cellid = cid.ci
+            } else if (cellInfo is CellInfoWcdma) {
+                if (cellInfo.cellIdentity.mnc != activeMnc) continue
+                val cid = cellInfo.cellIdentity
+                val css = cellInfo.cellSignalStrength
+                val bw = CellInfo.UNAVAILABLE
+
+                drawCellInfoView(cellInfo)
+
+                val epoch = System.currentTimeMillis() / 1000
+
+                logVO = LogVO(
+                    epoch.toInt(),
+                    latlng.latitude, latlng.longitude,
+                    cid.mcc, cid.mnc,
+                    cid.lac, cid.cid, css.dbm, CellInfo.UNAVAILABLE, CellInfo.UNAVAILABLE
+                )
+                cellid = cid.cid
+            }
+
+            if (logVO != null) {
+                recordManager.plotAndLog(logVO)
+
+                val logFile = createLogFileObj()
+                recordManager.writeCsvLog(logVO, logFile)
+            }
+        }
+
+        //cellid = 184026*256+21 // docomo  dummy cell
+        //cellid = 279785*256+12 // rakuten dummy cell
+
+        if (0 <= debugCellIndex && debugCellIndex < recordManager.logList.size) {
+            val lvo = recordManager.logList[debugCellIndex]
+            cellid = lvo.ci
+            latlng = LatLng(lvo.lat, lvo.lng)
+            val bw = if (lvo.bw == CellInfo.UNAVAILABLE) "-" else "${lvo.bw / 1000}MHz"
+            val ta = if (lvo.ta == CellInfo.UNAVAILABLE) "-" else lvo.ta.toString()
+            val bgColor = getColorByMnc(lvo.mcc, lvo.mnc)
+            val cvo = CellInfoViewVO(
+                if (lvo.rsrp < 0) lvo.rsrp else null,
+                "eNB-LCID: ${cellid / 256}-${cellid % 256}",
+                "PCI: 999  BW: $bw",
+                "TA: $ta",
+                bgColor
+            )
+            drawCellInfoView(cvo)
+            cvo.rsrp
+        }
+
+        // 圏外の場合は、上のビューに圏外表示
+        if (cellid == 0) drawCellInfoView(null, 0)
+
+
+        // デバッグ用仮表示
+        /*
+        val bgColor = getColorByMnc(440, 11)
+        val vo = CellInfoViewVO(-88, "eNB-LCID: 279785-12", "PCI: 999  BW: 99MHz", "TA: -", bgColor)
+        drawCellInfoView(vo)
+        */
+
+        if ( myMapManager==null ) return
+        //// 基地局表示
+        // マイマップにある場合はソレ
+        val bExist = myMapManager!!.drawLine(latlng, cellid, mMap)
+        mlsManager.removeMls()
+
+        if (!bExist) {
+            // マイマップにない場合はMLSから
+            mlsManager.drawMlsCells(latlng, cellid, mMap)
+        }
+
+        // 地図表示位置反映
+        if (bMoveCurrentLocation) moveTo(latlng)
+    }
+
+    private fun createLogFileObj(): File {
+        val df = SimpleDateFormat("yyyyMMdd")
+        val yyyyMMdd = df.format(Date())
+        return File(applicationContext.externalCacheDir, "log_$yyyyMMdd.csv")
+    }
+
+    data class CellInfoViewVO(val rsrp: Int?, val l1: String, val l2: String, val r: String, val bgColor: Int?)
+
+
+    private fun drawCellInfoView(cellInfo: CellInfoLte?, bw: Int) {
+        val vo = if (cellInfo != null) {
+            val cid = cellInfo.cellIdentity
+            val css = cellInfo.cellSignalStrength
+            val enb = cid.ci ushr 8
+            val lcid = cid.ci and 255
+
+            val bwStr = if (bw != CellInfo.UNAVAILABLE) {
+                (bw / 1000).toString() + "MHz"
+            } else {
+                "-"
+            }
+            val ta =
+                if (css.timingAdvance != CellInfo.UNAVAILABLE) css.timingAdvance.toString() else "-"
+
+            val rsrp = if (css.rsrp != CellInfo.UNAVAILABLE) css.rsrp else null
+            val bgColor = getColorByMnc(cid.mcc, cid.mnc)
+            CellInfoViewVO(
+                rsrp,
+                "eNB-LCID: ${enb}-${lcid}",
+                "PCI: ${cid.pci}  BW: $bwStr",
+                "TA: $ta",
+                bgColor
+            )
+        } else {
+            CellInfoViewVO(
+                null,
+                "eNB-LCID: -",
+                "PCI: -  BW: -",
+                "TA: -",
+                null
+            )
+        }
+        drawCellInfoView(vo)
+    }
+
+    private fun drawCellInfoView(cellInfo: CellInfoWcdma?) {
+        val vo = if (cellInfo != null) {
+            val ci = cellInfo.cellIdentity
+            val css = cellInfo.cellSignalStrength
+            val rnc = ci.cid ushr 16
+            val cid = ci.cid and 65535
+
+            var rsrp = if (css.dbm != CellInfo.UNAVAILABLE) css.dbm else null
+            val bgColor = getColorByMnc(ci.mcc, ci.mnc)
+
+            CellInfoViewVO(
+                rsrp,
+                "LAC-UCID: ${ci.lac}-${ci.cid}",
+                "RNC-CID: ${rnc}-${cid}",
+                "",
+                bgColor
+            )
+        } else {
+            CellInfoViewVO(
+                null,
+                "LAC-UCID: -",
+                "RNC-CID:  -",
+                "",
+                null
+            )
+        }
+        drawCellInfoView(vo)
+    }
+
+    private fun drawCellInfoView(vo: CellInfoViewVO) {
+        vo.bgColor?.let { cellInfoView.setBackgroundColor(it) }
+        cellInfoView.cellRsrp = vo.rsrp
+        cellInfoView.stringL1 = vo.l1
+        cellInfoView.stringL2 = vo.l2
+        cellInfoView.stringR = vo.r
+        cellInfoView.invalidate()
+    }
+
+    private fun getColorByMnc(mcc: Int, mnc: Int): Int {
+        val context = applicationContext
+        return when (mcc) {
+            440 -> {
+                when (mnc) {
+                    11 -> ContextCompat.getColor(context, R.color.colorRakuten)
+                    50, 51, 52, 53 -> ContextCompat.getColor(context,R.color.colorAu)
+                    10 -> ContextCompat.getColor(context,R.color.colorDocomo)
+                    else -> ContextCompat.getColor(context,R.color.colorSoftbank)
+                }
+            }
+            441 -> {
+                when (mnc) {
+                    0 -> ContextCompat.getColor(context,R.color.colorSoftbank)
+                    10 -> ContextCompat.getColor(context,R.color.colorAu)
+                    else -> ContextCompat.getColor(context,R.color.colorForeign)
+                }
+            }
+            else -> ContextCompat.getColor(context,R.color.colorForeign)
+        }
+    }
+
+    private fun moveTo(latlng: LatLng) {
+        if (myMapManager!=null && myMapManager!!.myMapLL!=null){
+            val llBuilder = LatLngBounds.Builder()
+            llBuilder.include(myMapManager!!.myMapLL!!)
+            llBuilder.include(latlng)
+            // 拡大しすぎないように最低限のエリアを含める
+            llBuilder.include(LatLng(latlng.latitude - 0.005, latlng.longitude - 0.005))
+            llBuilder.include(LatLng(latlng.latitude + 0.005, latlng.longitude + 0.005))
+
+            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(llBuilder.build(), 100), 300, null)
+        }
+        else if (mlsManager.foundMlsBounds != null) {
+            val llBuilder = LatLngBounds.Builder()
+            llBuilder.include(mlsManager.foundMlsBounds!!.northeast)
+            llBuilder.include(mlsManager.foundMlsBounds!!.southwest)
+            llBuilder.include(latlng)
+            // 拡大しすぎないように最低限のエリアを含める
+            llBuilder.include(LatLng(latlng.latitude - 0.005, latlng.longitude - 0.005))
+            llBuilder.include(LatLng(latlng.latitude + 0.005, latlng.longitude + 0.005))
+
+            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(llBuilder.build(), 100), 300, null)
+        } else {
+            mMap.animateCamera(CameraUpdateFactory.newLatLng(latlng), 300, null)
+        }
+    }
+
+    private fun createLocationCallback() {
+
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult?) {
+                locationResult ?: return
+                val location = locationResult.lastLocation
+                location ?: return
+
+                onLocation(location)
+            }
+        }
+    }
+
+    private fun readLogAndPutMarker() {
+        println("＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊readLogAndPutMarker")
+        val context = applicationContext
+
+        val logFile = if (DEBUG_LOAD_LOG_FILENAME == "") createLogFileObj()
+        else File(context.externalCacheDir, DEBUG_LOAD_LOG_FILENAME)
+
+        recordManager.readLog(logFile)
+
+        recordManager.plotAll(CellId(0))
+    }
+
+    private fun requestPermission() {
+        val permissionAccessCoarseLocationApproved =
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                    PackageManager.PERMISSION_GRANTED &&
+                    ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                    PackageManager.PERMISSION_GRANTED
+
+        if (permissionAccessCoarseLocationApproved) {
+            val backgroundLocationPermissionApproved = ActivityCompat
+                .checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+                    PackageManager.PERMISSION_GRANTED
+
+            if (backgroundLocationPermissionApproved) {
+                // フォアグラウンドとバックグランドのバーミッションがある
+            } else {
+                // フォアグラウンドのみOKなので、バックグラウンドの許可を求める
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+                    PERMISSION_REQUEST_CODE
+                )
+            }
+        } else {
+            // 位置情報の権限が無いため、許可を求める
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                ),
+                PERMISSION_REQUEST_CODE
+            )
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            onRequestLocationPermissionsResult(permissions, grantResults)
+        }
+    }
+
+    private fun onRequestLocationPermissionsResult(permissions: Array<String>, grantResults: IntArray) {
+        if (permissions.size != grantResults.size) {
+            // ココには来ないはず
+            return
+        }
+        var allow = false
+        var deny = false
+        val size = permissions.size
+        for (i in 0 until size) {
+            if (permissions[i] == Manifest.permission.ACCESS_COARSE_LOCATION || permissions[i] == Manifest.permission.ACCESS_FINE_LOCATION) {
+                if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    allow = true
+                } else {
+                    deny = true
+                }
+            }
+        }
+        if (allow) {
+            // 権限を取得したのでもう一度setMyLocationEnabled()を呼び出す
+            setMyLocationEnabled()
+        }
+        // 注：else if じゃないです
+        if (deny) {
+            // 権限を取得できなかったので諦める
+            Toast.makeText(this, "No location permissions granted", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // mMap.isMyLocationEnabled の、権限考慮版
+    private fun setMyLocationEnabled() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+            && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this, arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ), PERMISSION_REQUEST_CODE
+            )
+            return
+        }
+        mMap.isMyLocationEnabled = true
+    }
+
+    override fun onResume() {
+        super.onResume()
+        startLocationUpdates()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopLocationUpdates()
+    }
+
+    override fun onMapReady(googleMap: GoogleMap) {
+        mMap = googleMap
+        myMapManager.init(mMap)
+
+        // マーカータップ時にズームボタンの左に表示されるツールバー（いらない）
+        mMap.uiSettings.isMapToolbarEnabled = false
+
+        //mMap.isMyLocationEnabled = true   // ←権限的にそう簡単にいかない・・・
+        setMyLocationEnabled()  // 権限考慮版
+
+        mMap.setOnCameraMoveStartedListener(this)
+        mMap.setOnMyLocationButtonClickListener(this)
+
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialMapPos, initialMapZoom))
+
+        recordManager = RecordManager(mMap)
+        readLogAndPutMarker()
+
+        val mid = getMyMapMid()
+        if (mid != "") {
+            DownloadMyMapTask().execute(mid as Object, false as Object)
+        }
+    }
+
+    // 設定からマイマップのMIDを取得する
+    private fun getMyMapMid():String {
+        var mid = ""
+        try {
+            val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+            val myMapUrl = sharedPreferences.getString("myMapUrl", null)
+            if (myMapUrl != null) {
+                val myMapUrlTrimmed = myMapUrl.trim()
+                if (myMapUrlTrimmed.length == 33) {
+                    // 33文字の場合はそのまま
+                    mid = myMapUrlTrimmed
+                } else {
+                    // それ以外の場合は、URIを解析して引数midを取得
+                    val uri = URI(myMapUrlTrimmed)
+                    val query = uri.query
+                    val queryList = query.split("&")
+                    for (q in queryList) {
+                        val kv = q.split("=")
+                        if (kv[0] == "mid") {
+                            mid = kv[1]
+                        }
+                    }
+                }
+            }
+        }
+        catch(e:Exception){
+            // TODO マイマップURI解析失敗時のエラー表示
+        }
+        return mid
+    }
+
+    private fun startLocationUpdates() {
+        val locationRequest = createLocationRequest() ?: return
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback,
+            null
+        )
+    }
+
+    private fun stopLocationUpdates() {
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+    }
+
+    private fun createLocationRequest(): LocationRequest? {
+        return LocationRequest.create()?.apply {
+
+            val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+            val intervalSecs = sharedPreferences.getInt("refreshInterval", 5)
+
+            interval = intervalSecs * 1000L
+            //fastestInterval = 1000
+            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        }
+    }
+
+    override fun onCameraMoveStarted(reason: Int) {
+        println("onCameraMoveStarted")
+        if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+            bMoveCurrentLocation = false
+        }
+    }
+
+    override fun onMyLocationButtonClick(): Boolean {
+        println("onMyLocationButtonClick")
+        bMoveCurrentLocation = true
+
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener {
+                if (it != null) {
+                    val latlng = LatLng(it.latitude, it.longitude)
+                    moveTo(latlng)
+                }
+            }
+
+        return false
+    }
+
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        if (sharedPreferences != null) {
+            when (key) {
+                "myMapUrl" -> {
+                    //Handler(Looper.getMainLooper()).post(Runnable {
+                    val mid = getMyMapMid()
+                    if (mid != "") {
+                        DownloadMyMapTask().execute(mid as Object, true as Object)
+                    } else {
+                        // TODO 未設定の場合の TOAST
+                    }
+                    //})
+                }
+                "refreshInterval" -> {
+                    println("onSharedPreferenceChanged(" + sharedPreferences.getInt(key, -1) + ",$key)")
+                    // 一旦止めて再度動かすことで、更新間隔を反映する
+                    stopLocationUpdates()
+                    startLocationUpdates()
+                }
+                else -> {
+                    println("onSharedPreferenceChanged($key)")
+                }
+            }
+        }
+    }
+
+    private inner class DownloadMlsTask : AsyncTask<Boolean, Void, String>() {
+        override fun doInBackground(vararg args: Boolean?): String {
+            val bReload = args[0]!!
+            val context = applicationContext
+            val cacheFile = File(context.cacheDir, MLS_JSON_FILENAME)
+            mlsManager = MlsManager()
+            return try {
+                mlsManager.readMls(MLS_JSON_URL, cacheFile, bReload)
+                "OK"
+            } catch (e: IOException) {
+                "接続エラー"//resources.getString(R.string.connection_error)
+            } catch (e: XmlPullParserException) {
+                "XMLエラー"//resources.getString(R.string.xml_error)
+            }
+        }
+
+        override fun onPostExecute(result: String) {
+            // 特にやることは無い、かな？
+
+            println(result)
+        }
+    }
+
+    private inner class DownloadMyMapTask : AsyncTask<Object, Void, String>() {
+        override fun doInBackground(vararg args: Object?): String? {
+            return try {
+                val key = args[0].toString()
+                val bReload = args[1] as Boolean
+                val context = applicationContext
+                val cacheFile = File(context.cacheDir, key + ".kmz")
+                myMapManager!!.readMyMap(key, cacheFile, bReload)
+                "OK"
+            } catch (e: IOException) {
+                "接続エラー"//resources.getString(R.string.connection_error)
+            } catch (e: XmlPullParserException) {
+                "XMLエラー"//resources.getString(R.string.xml_error)
+            }
+        }
+
+        override fun onPostExecute(result: String) {
+
+            if ( result == "OK") {
+                myMapManager?.plotPlacemark()
+            }
+
+            println(result)
+        }
+    }
+
+
+}

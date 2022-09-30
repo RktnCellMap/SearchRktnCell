@@ -1,0 +1,23 @@
+<PreferenceScreen
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <SeekBarPreference
+            app:key="refreshInterval"
+            android:max="10"
+            app:min="1"
+            android:defaultValue="5"
+            app:showSeekBarValue="true"
+            app:title="@string/refreshInterval_title" />
+
+    <EditTextPreference
+            app:key="myMapUrl"
+            app:title="@string/myMapUrl_title"
+            app:useSimpleSummaryProvider="true"/>
+
+    <Preference
+            app:key="version"
+            app:title="@string/version_title"
+            app:summary="x.x.x"/>
+
+</PreferenceScreen>

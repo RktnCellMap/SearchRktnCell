@@ -1,0 +1,8 @@
+<resources>
+    <declare-styleable name="CellInfoView">
+        <attr name="cellRsrp" format="integer"/>
+        <attr name="stringL1" format="string"/>
+        <attr name="stringL2" format="string"/>
+        <attr name="stringR" format="string"/>
+    </declare-styleable>
+</resources>
