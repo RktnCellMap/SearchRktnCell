@@ -18,8 +18,8 @@ class RecordManager {
 
     companion object {
         private const val TAG = "RecordManager"
-        private const val PLOT_DISTANCE_EQ = 10f
-        private const val PLOT_DISTANCE_NE = 50f
+        private const val PLOT_DISTANCE_EQ = 30f //10f
+        private const val PLOT_DISTANCE_NE = 30f //50f
     }
 
     private var logList = mutableListOf<LogVO>()
@@ -58,7 +58,7 @@ class RecordManager {
         if (bPlotMyMapCell) return true    // 設定で全プロットすることになってる
         val app = MyApplication.getInstance()
         val name = app.myMapManager.getName(logVO.ci)
-        if (name == "") return true // マイマップになし→プロットする。
+        if (name == null || name == "") return true // マイマップになし→プロットする。
         return name.endsWith('？')  // マイマップ上の名前の最後が？ならプロットする。そうでなければしない。
     }
 
@@ -147,23 +147,18 @@ class RecordManager {
         val icon = BitmapDescriptorFactory.fromBitmap(createBitmap(logVO.rsrp, ci.sector3, logVO.ta, bEqualBs))
 
         val title = "${ci.eNB}-${ci.sector}"
+            val snippet = "RSRP:${logVO.rsrp} TA:${logVO.taStr()}"
+            val taForZ = if (logVO.ta < 2000) logVO.ta else 1999
         val markerOptions = MarkerOptions()
             .position(latlng)
             .anchor(0.5f, 0.5f)
             .title(title)
-            .snippet("RSRP:${logVO.rsrp}")
+                .snippet(snippet)
             .icon(icon)
             .alpha(0.8f)
-            .zIndex((if (bEqualBs) 3999f else 1999f) - logVO.ta)
+                .zIndex((if (bEqualBs) 3999f else 1999f) - taForZ)
         val marker: Marker = mMap.addMarker(markerOptions)
         markerList.add(marker)
-    }
-
-    private fun calcColor(rsrp: Int, sector3: Int, bEqualBs: Boolean): Int {
-        val h = (sector3 % 3) * 120f // 色相。セクタ順に RGBになるようにしてます
-        val s = Utils.arduinoMapLimit(rsrp, -98, -50, 16, 255) / 255f // 彩度。RSRP比例
-        val v = if (bEqualBs) 1f else 0.6f  // 明度。別基地局は暗く。
-        return Color.HSVToColor(floatArrayOf(h, s, v))
     }
 
     // マーカーに使うビットマップを生成
@@ -173,7 +168,7 @@ class RecordManager {
         val canvas = Canvas(bitmap)
         val paint = Paint()
         paint.isAntiAlias = true
-        paint.color = calcColor(rsrp, sector3, bEqualBs)
+        paint.color = Utils.calcColor(rsrp, sector3, bEqualBs)
 
         // taに応じた点を描画
         when (ta) {

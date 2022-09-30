@@ -34,6 +34,8 @@ class KmlParser {
     var name: String = ""
     var description: String = ""
 
+    var eciDefined = false  // eNB-LCIDの定義が1つ以上あるかどうか
+
     data class Placemark(
         val name: String,
         val description: String,
@@ -276,8 +278,8 @@ class KmlParser {
         while (parser.next() != XmlPullParser.END_TAG) {
             if (parser.eventType != XmlPullParser.START_TAG) continue
             when (parser.name) {
-                "name" -> name = readTag(parser, "name")
-                "description" -> description = readTag(parser, "description")
+                "name" -> name = readTag(parser, "name").trim()
+                "description" -> description = readTag(parser, "description").trim()
                 "styleUrl" -> styleUrl = readTag(parser, "styleUrl")
                 "Point" -> ll = readPoint(parser)
                 "address" -> ll = readAddress(parser)
@@ -292,10 +294,14 @@ class KmlParser {
 
         if (eciMutableList.count() == 0) {
             // ExtendedData にデータが無ければ、name,descriptionから取得
-            eciMutableList.addAll(EciUtil.getEciFromMemo(name).asIterable())
-            eciMutableList.addAll(EciUtil.getEciFromMemo(description).asIterable())
+        	eciMutableList.addAll(EciUtil.getEciFromMemo(name).asIterable())
+        	eciMutableList.addAll(EciUtil.getEciFromMemo(description).asIterable())
         }
         val eciList = eciMutableList.sorted().distinct()
+        if (!eciDefined && 0 < eciList.count()) {
+            eciDefined = true
+        }
+
         styleUrl = styleUrl.substring(1)   // 先頭の#を取る
         return Placemark(name, description, styleUrl, ll, eciList, EciUtil.getEnbLcid(eciList))
     }

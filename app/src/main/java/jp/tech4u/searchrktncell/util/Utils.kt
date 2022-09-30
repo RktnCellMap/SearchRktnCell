@@ -1,5 +1,6 @@
 package jp.tech4u.searchrktncell.util
 
+import android.graphics.Color
 import android.telephony.CellInfo
 import android.text.TextUtils
 import android.util.Log
@@ -101,12 +102,34 @@ object Utils {
                         rows[9].toInt(),
                     )
                     logList.add(logVO)
+                }else if (rows.count() == 11) {
+                    val logVO = LogVO(
+                        rows[0].toInt(),
+                        rows[1].toDouble(),
+                        rows[2].toDouble(),
+                        rows[3],
+                        rows[4],
+                        rows[5].toInt(),
+                        rows[6].toLong(),
+                        rows[7].toInt(),
+                        rows[8].toInt(),
+                        rows[9].toInt(),
+                        rows[10].toInt(),
+                    )
+                    logList.add(logVO)
                 }
             } catch (e: java.lang.Exception) {
                 Log.w(TAG, e.toString())
                 // 握りつぶすｗ
             }
         }
+    }
+
+    fun calcColor(rsrp: Int, sector3: Int, bEqualBs: Boolean): Int {
+        val h = (sector3 % 3) * 120f // 色相。セクタ順に RGBになるようにしてます
+        val s = Utils.arduinoMapLimit(rsrp, -98, -50, 16, 255) / 255f // 彩度。RSRP比例
+        val v = if (bEqualBs) 1f else 0.6f  // 明度。別基地局は暗く。
+        return Color.HSVToColor(floatArrayOf(h, s, v))
     }
 
     fun getColorByMnc(mccString: String?, mncString: String?): Int {
@@ -129,6 +152,17 @@ object Utils {
             }
             else -> ContextCompat.getColor(context, R.color.colorForeign)
         }
+    }
+
+    // 輝度(いわゆるYUVのY)を返す
+    fun getLuminanceColor(color: Int): Int {
+        return (Color.red(color) * 0.299f + Color.green(color) * 0.587f + Color.blue(color) * 0.114f).toInt()
+    }
+
+    // 背景色に負けない前景色(モノクロ)を返す
+    fun getRevMonoColor(color: Int): Int {
+        val y = getLuminanceColor(color)
+        return if (y < 128) R.color.colorMapObjFgRev else R.color.colorMapObjFg
     }
 
     fun getActiveMnc(cellInfoAry: List<CellInfo>): String? {

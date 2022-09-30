@@ -30,17 +30,22 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
 
         val myMapUrlSummaryProvider = Preference.SummaryProvider<EditTextPreference> { preference ->
-            val mid = Utils.getMyMapMidFromUrl(preference.text)
-            if (mid == "") {
-                "未設定"
-            } else {
-                val app = MyApplication.getInstance()
-                val name = app.myMapManager.midNameMap[mid]
-                if (TextUtils.isEmpty(name)) {
-                    mid
+            try {
+                val mid = Utils.getMyMapMidFromUrl(preference.text)
+                if (mid == "") {
+                    "未設定"
                 } else {
-                    name
+                    val app = MyApplication.getInstance()
+                    val name = app.myMapManager.midNameMap[mid]
+                    if (TextUtils.isEmpty(name)) {
+                        mid
+                    } else {
+                        name
+                    }
                 }
+            } catch (e: Exception) {
+                // URIの解析ができない場合はそのまま返す
+                preference.text
             }
         }
 

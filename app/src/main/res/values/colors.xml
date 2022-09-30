@@ -15,6 +15,10 @@
     <color name="colorMlsStroke">#80FF008C</color>
     <color name="colorMlsFill">#40FF008C</color>
 
+    <color name="colorMapObjBg">#A0FFFFFF</color>
+    <color name="colorMapObjFg">#222222</color>
+    <color name="colorMapObjFgRev">#DDDDDD</color>
+
     <color name="colorSignal1">#44FF44</color> <!-- 強：緑 -->
     <color name="colorSignal2">#F0F000</color> <!-- 中：黄 -->
     <color name="colorSignal3">#F39800</color> <!-- 弱：オレンジ -->
