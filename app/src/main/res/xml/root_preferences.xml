@@ -11,6 +11,15 @@
             app:useSimpleSummaryProvider="true"
     />
 
+    <DropDownPreference
+            app:key="theme"
+            app:title="テーマ"
+            app:entries="@array/themeEntries"
+            app:entryValues="@array/themeEntryValues"
+            android:defaultValue="MODE_NIGHT_FOLLOW_SYSTEM"
+            app:useSimpleSummaryProvider="true"
+    />
+
     <SwitchPreference
             app:key="locationMode"
             app:title="現在地追従モード"

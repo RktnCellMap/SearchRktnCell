@@ -3,6 +3,7 @@ package jp.tech4u.searchrktncell
 import android.graphics.*
 import android.location.Location
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
@@ -224,9 +225,11 @@ class RecordManager {
 
         // TAのテキストを描画
         if (ta in 0..1282) {
+            val context = MyApplication.getInstance()
+
             val textPaint = Paint()
             textPaint.isAntiAlias = true
-            textPaint.color = Color.BLACK
+            textPaint.color = ContextCompat.getColor(context, R.color.colorTaText)
             textPaint.textAlign = Paint.Align.CENTER
             textPaint.textSize = size * 0.7f
             val xPos = canvas.width / 2f

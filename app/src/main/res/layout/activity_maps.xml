@@ -44,7 +44,6 @@
                 android:layout_centerVertical="true"
                 android:layout_centerHorizontal="true"
                 android:visibility="invisible"
-                app:tint="#333333"
         />
         <TextView
                 android:id="@+id/txtCellName"

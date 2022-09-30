@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#7F0046</color>
+    <color name="colorPrimaryDark">#000033</color>
+    <color name="colorAccent">#03DAC5</color>
+
+    <color name="colorDocomo">#660019</color>
+    <color name="colorAu">#060635</color>
+    <color name="colorSoftbank">#5b5d5f</color>
+    <color name="colorRakuten">#7F0046</color>
+    <color name="colorForeign">#606060</color>
+
+    <color name="colorCellInfoText">#cccccc</color>
+    <color name="colorCellInfoBarText">#cccccc</color>
+    <color name="colorCellInfoBarFrame">#222222</color>
+    <color name="colorCellInfoBarBg">#444444</color>
+
+    <color name="colorTaText">#000000</color>
+
+    <color name="colorCurrToCellLine">#C06997FF</color>
+
+    <color name="colorMlsStroke">#807F0046</color>
+    <color name="colorMlsFill">#407f0046</color>
+
+    <color name="colorMapObjBg">#A0222222</color>
+    <color name="colorMapObjFg">#aaaaaa</color>
+
+    <!-- テーマに依存しない、明暗色-->
+    <color name="colorThemeIndependentDark">#222222</color>
+    <color name="colorThemeIndependentLight">#DDDDDD</color>
+
+    <color name="colorSignal1">#227F22</color> <!-- 強：緑 -->
+    <color name="colorSignal2">#787800</color> <!-- 中：黄 -->
+    <color name="colorSignal3">#794c00</color> <!-- 弱：オレンジ -->
+    <color name="colorSignal4">#7F2222</color> <!-- ぴえん：赤 -->
+
+</resources>

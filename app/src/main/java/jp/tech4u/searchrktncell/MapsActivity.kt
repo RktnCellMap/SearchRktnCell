@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.*
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.drawable.Animatable
 import android.location.Location
 import android.net.Uri
@@ -34,6 +35,7 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MapStyleOptions
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
 import jp.tech4u.searchrktncell.data.LogVO
@@ -48,6 +50,7 @@ import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
+
 
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
@@ -102,6 +105,8 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var powerConnectionReceiver: PowerConnectionReceiver
 
+    private lateinit var darkMapStyle: MapStyleOptions
+
     // 最後に得た現在地（PhoneStateListenerで参照）
     private var lastLatLng: LatLng? = null
 
@@ -113,6 +118,7 @@ class MapsActivity : AppCompatActivity(),
 
     // デバッグ用
     private var bPress = false
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -133,6 +139,9 @@ class MapsActivity : AppCompatActivity(),
 
         //btnGps.setImageResource(R.drawable.gps_not_fixed)
         (btnGps.drawable as Animatable).start()
+
+        // ダークテーマのマップスタイルを読み込む（反映はまだ）
+        darkMapStyle = MapStyleOptions.loadRawResourceStyle(this, R.raw.dark_map)
 
         powerConnectionReceiver = PowerConnectionReceiver(applicationContext, window)
         powerConnectionReceiver.setScreenOn()
@@ -207,10 +216,49 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
+    // 現在のテーマを調べ、それを反映する
+    private fun setTheme() {
+        // アプリ設定を見て判断。アプリ設定がFOLLOW_SYSTEMなら、システム設定を見る。
+        val bDark = when(Utils.getPreferenceString("theme", "MODE_NIGHT_FOLLOW_SYSTEM")) {
+            "MODE_NIGHT_YES" -> true
+            "MODE_NIGHT_NO" -> false
+            else -> {
+                // システム設定を見る
+                val configuration = applicationContext.resources.configuration
+                val currentNightMode = configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+                currentNightMode == Configuration.UI_MODE_NIGHT_YES
+            }
+        }
+
+        val style = if (bDark) darkMapStyle else null
+        Log.e(localClassName, "setTheme() $bDark")
+        try {
+            val success = mMap.setMapStyle(style)
+            if (!success) {
+                Log.e(localClassName, "Style parsing failed.")
+            }
+
+            // 自動でやって欲しいけど、どうやるのかわからんので手動で変更します。
+            txtLatLng.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
+            txtLatLng.setTextColor(ContextCompat.getColor(this, R.color.colorMapObjFg))
+            btnGps.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
+
+
+
+        } catch (e: UninitializedPropertyAccessException ) {
+            // 設定でテーマが指定されていると、起動時にmMapがコレ。
+            // 問題ないので握りつぶす。
+        } catch (e: Resources.NotFoundException) {
+            Log.e(localClassName, "Can't find style. Error: ", e)
+        }
+    }
+
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
         //myMapManager.init(mMap)
         MyApplication.getInstance().mMap = mMap
+
+        setTheme()
 
         // マーカータップ時にズームボタンの左に表示されるツールバー（いらない）
         mMap.uiSettings.isMapToolbarEnabled = false
@@ -288,11 +336,18 @@ class MapsActivity : AppCompatActivity(),
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        Log.i(localClassName, "onRestart")
+        Log.i(localClassName, "onConfigurationChanged")
         when (newConfig.orientation) {
             Configuration.ORIENTATION_LANDSCAPE -> supportActionBar!!.hide()
             else -> supportActionBar!!.show()
         }
+
+        supportActionBar!!.customView.invalidate()
+
+        // 書き換えが必要かもしれないので、適当な値を入れとく
+        prevDisplayedCell = -1L
+
+        setTheme()
     }
 
     private val locationCallback = object : LocationCallback() {
@@ -413,14 +468,12 @@ class MapsActivity : AppCompatActivity(),
             debugCellInfo!!.getLog(listLogVoNow)
             if (listLogVoNow.size != 0) {
                 val lvo = listLogVoNow[0]
-                val bw = lvo.bwStr()
-                val ta = lvo.taStr()
-                val bgColor = Utils.getColorByMnc(lvo.mccString, lvo.mncString)
+                val bgColor = cellInfoView.getColorByMnc(lvo.mccString, lvo.mncString)
                 val cvo = CellInfoViewVO(
                     if (lvo.rsrp < 0) lvo.rsrp else null,
                     "eNB-LCID: ${lvo.ci / 256}-${lvo.ci % 256}",
-                    "PCI: 999  BW: $bw",
-                    "TA: $ta",
+                    "PCI: ${lvo.pci}  BW: ${lvo.bwStr()}",
+                    "TA: ${lvo.taStr()}",
                     bgColor
                 )
                 cellInfoView.drawCellInfoView(cvo)
@@ -474,10 +527,10 @@ class MapsActivity : AppCompatActivity(),
         } else {
             //// 基地局線表示
             // マイマップにある場合はソレ
-            val bExist = app.myMapManager.drawLine(latlng, lastLogVO, mMap)
+            val bExist = app.myMapManager.drawLine(this, latlng, lastLogVO, mMap)
             if (!bExist) {
                 // マイマップにない場合はMLSから
-                app.mlsManager.drawMlsCells(latlng, lastLogVO, mMap)
+                app.mlsManager.drawMlsCells(this, latlng, lastLogVO, mMap)
             } else {
                 app.mlsManager.removeMls()
             }
@@ -508,7 +561,7 @@ class MapsActivity : AppCompatActivity(),
                 // 他キャリア
                 txtCellName.text = ""
             } else {
-                val ctx = applicationContext
+                val ctx = this
                 when (val name = app.myMapManager.getName(logVO.ci)) {
                     null -> txtCellName.text = ""   // そもそもマイマップにeNB-LCIDの定義がない
                     "" -> {
@@ -972,6 +1025,10 @@ class MapsActivity : AppCompatActivity(),
                     initRecordManager()
                     app.recordManager.rePlot(mMap)
                 }
+                "theme" -> {
+                    app.setDefaultNightModeByPreference()
+                    setTheme()
+                }
                 else -> {
                     var bMyMapUrlChanged = false
                     for ((index, keyName) in app.myMapManager.myMapUrlKeys.withIndex()) {
@@ -979,7 +1036,6 @@ class MapsActivity : AppCompatActivity(),
                         if (key != null && key == keyName || key == keyName + "Enable") {
                             val mid = Utils.getMyMapMid(keyName)
                             if (mid == "") {
-                                val app = MyApplication.getInstance()
                                 app.myMapManager.clearMyMap(index)
                             } else {
                                 scope.launch {

@@ -10,6 +10,13 @@
     <color name="colorRakuten">#FF008C</color>
     <color name="colorForeign">#C0C0C0</color>
 
+    <color name="colorCellInfoText">#ffffff</color>
+    <color name="colorCellInfoBarText">#000000</color>
+    <color name="colorCellInfoBarFrame">#444444</color>
+    <color name="colorCellInfoBarBg">#CCCCCC</color>
+
+    <color name="colorTaText">#000000</color>
+
     <color name="colorCurrToCellLine">#C00000FF</color>
 
     <color name="colorMlsStroke">#80FF008C</color>
@@ -17,7 +24,10 @@
 
     <color name="colorMapObjBg">#A0FFFFFF</color>
     <color name="colorMapObjFg">#222222</color>
-    <color name="colorMapObjFgRev">#DDDDDD</color>
+
+    <!-- テーマに依存しない、明暗色-->
+    <color name="colorThemeIndependentDark">#222222</color>
+    <color name="colorThemeIndependentLight">#DDDDDD</color>
 
     <color name="colorSignal1">#44FF44</color> <!-- 強：緑 -->
     <color name="colorSignal2">#F0F000</color> <!-- 中：黄 -->

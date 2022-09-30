@@ -13,12 +13,12 @@ class UtilsTest {
     }
     @Test
     fun getRevMonoColor() {
-        assertEquals(R.color.colorMapObjFg, Utils.getRevMonoColor(Utils.calcColor(-70, 0, true)))
-        assertEquals(R.color.colorMapObjFg, Utils.getRevMonoColor(Utils.calcColor(-70, 1, true)))
-        assertEquals(R.color.colorMapObjFgRev, Utils.getRevMonoColor(Utils.calcColor(-70, 2, true)))
+        assertEquals(R.color.colorThemeIndependentDark, Utils.getRevMonoColor(Utils.calcColor(-70, 0, true)))
+        assertEquals(R.color.colorThemeIndependentDark, Utils.getRevMonoColor(Utils.calcColor(-70, 1, true)))
+        assertEquals(R.color.colorThemeIndependentLight, Utils.getRevMonoColor(Utils.calcColor(-70, 2, true)))
 
-        assertEquals(R.color.colorMapObjFgRev, Utils.getRevMonoColor(Utils.calcColor(-60, 0, true)))
-        assertEquals(R.color.colorMapObjFg, Utils.getRevMonoColor(Utils.calcColor(-60, 1, true)))
-        assertEquals(R.color.colorMapObjFgRev, Utils.getRevMonoColor(Utils.calcColor(-60, 2, true)))
+        assertEquals(R.color.colorThemeIndependentLight, Utils.getRevMonoColor(Utils.calcColor(-60, 0, true)))
+        assertEquals(R.color.colorThemeIndependentDark, Utils.getRevMonoColor(Utils.calcColor(-60, 1, true)))
+        assertEquals(R.color.colorThemeIndependentLight, Utils.getRevMonoColor(Utils.calcColor(-60, 2, true)))
     }
 }

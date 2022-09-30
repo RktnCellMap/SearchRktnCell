@@ -1,5 +1,6 @@
 package jp.tech4u.searchrktncell
 
+import android.content.Context
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -160,9 +161,7 @@ class MlsManager {
     }
 
     // MLSのセルの三角形などと、それへの直線を描画する
-    fun drawMlsCells(latlng: LatLng, logVO: LogVO, mMap: GoogleMap) {
-        val app = MyApplication.getInstance()
-
+    fun drawMlsCells(context : Context, latlng: LatLng, logVO: LogVO, mMap: GoogleMap) {
         if (lastCell != logVO.ci) {
             // 三角形の描画はハンドオーバーしたときだけ
             lastCell = logVO.ci
@@ -210,8 +209,8 @@ class MlsManager {
                         // マーカーを描かず、セルセンターへの線だけ引くようにする
                         mlsLL = LatLng(brpList[0].lat.toDouble(), brpList[0].lon.toDouble())
                     }
-                    2 -> drawMlsCells2(cellId, mlsList)  // もう一セクタの位置を推測して正三角形を描く
-                    3 -> drawMlsCells3(cellId, mlsList)  // 三角形を描く
+                    2 -> drawMlsCells2(context, cellId, mlsList)  // もう一セクタの位置を推測して正三角形を描く
+                    3 -> drawMlsCells3(context, cellId, mlsList)  // 三角形を描く
                 }
                 // （drawMlsCellsX の副作用で mlsLL, foundMlsBounds が設定されます）
 
@@ -231,7 +230,7 @@ class MlsManager {
             mlsLocLine = mMap.addPolyline(
                 PolylineOptions()
                     .add(latlng, mlsLL)
-                    .color(ContextCompat.getColor(app, R.color.colorCurrToCellLine))
+                    .color(ContextCompat.getColor(context, R.color.colorCurrToCellLine))
             )
         }
     }
@@ -261,7 +260,7 @@ class MlsManager {
     }
 
     // 2セクタ判明→もう一セクタの位置を推測して正三角形を描く
-    private fun drawMlsCells2(cellId: CellId, mlsList: List<MlsCellInfo>) {
+    private fun drawMlsCells2(context: Context, cellId: CellId, mlsList: List<MlsCellInfo>) {
         val app = MyApplication.getInstance()
 
         val mlsLL0 = LatLng(mlsList[0].lat.toDouble(), mlsList[0].lon.toDouble())
@@ -277,20 +276,20 @@ class MlsManager {
         mlsPolygon = app.mMap.addPolygon(
             PolygonOptions()
                 .strokeWidth(0f)
-                .fillColor(ContextCompat.getColor(app, R.color.colorMlsFill))
+                .fillColor(ContextCompat.getColor(context, R.color.colorMlsFill))
                 .add(mlsLL0).add(mlsLL1).add(thirdLL)
         )
 
         // 実線
         mlsLine1 = app.mMap.addPolyline(
             PolylineOptions()
-                .color(ContextCompat.getColor(app, R.color.colorMlsStroke))
+                .color(ContextCompat.getColor(context, R.color.colorMlsStroke))
                 .add(mlsLL0).add(mlsLL1)
         )
         // 点線
         mlsLine2 = app.mMap.addPolyline(
             PolylineOptions()
-                .color(ContextCompat.getColor(app, R.color.colorMlsStroke))
+                .color(ContextCompat.getColor(context, R.color.colorMlsStroke))
                 .pattern(LINE_PATTERN_1)
                 .add(mlsLL0).add(thirdLL).add(mlsLL1)
         )
@@ -310,13 +309,13 @@ class MlsManager {
     }
 
     // 3セクタ判明→三角形を描く
-    private fun drawMlsCells3(cellId: CellId, mlsList: List<MlsCellInfo>) {
+    private fun drawMlsCells3(context: Context, cellId: CellId, mlsList: List<MlsCellInfo>) {
         val app = MyApplication.getInstance()
 
         val llBuilder = LatLngBounds.Builder()
         val polyOpt = PolygonOptions()
-            .strokeColor(ContextCompat.getColor(app, R.color.colorMlsStroke))
-            .fillColor(ContextCompat.getColor(app, R.color.colorMlsFill))
+            .strokeColor(ContextCompat.getColor(context, R.color.colorMlsStroke))
+            .fillColor(ContextCompat.getColor(context, R.color.colorMlsFill))
         for (cellInfo in mlsList) {
             val ll = LatLng(cellInfo.lat.toDouble(), cellInfo.lon.toDouble())
             llBuilder.include(ll)

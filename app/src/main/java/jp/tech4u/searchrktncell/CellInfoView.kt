@@ -8,6 +8,7 @@ import android.text.TextPaint
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
 import jp.tech4u.searchrktncell.util.*
@@ -97,7 +98,6 @@ class CellInfoView : View {
             textAlign = Paint.Align.CENTER
             textSize = 24f
             setTypeface(typeface)
-            color = Color.BLACK
         }
 
         textPaintL = TextPaint().apply {
@@ -105,14 +105,12 @@ class CellInfoView : View {
             textAlign = Paint.Align.LEFT
             textSize = 24f
             setTypeface(typeface)
-            color = Color.WHITE
         }
         textPaintR = TextPaint().apply {
             flags = Paint.ANTI_ALIAS_FLAG
             textAlign = Paint.Align.RIGHT
             textSize = 24f
             setTypeface(typeface)
-            color = Color.WHITE
         }
     }
 
@@ -140,6 +138,10 @@ class CellInfoView : View {
         super.onDraw(canvas)
         Log.v(TAG, "CellInfoView.onDraw()")
 
+        textBarPaint.color = ContextCompat.getColor(context, R.color.colorCellInfoBarText)
+        textPaintL.color = ContextCompat.getColor(context, R.color.colorCellInfoText)
+        textPaintR.color = ContextCompat.getColor(context, R.color.colorCellInfoText)
+
         calcCoordinates()
         drawBar(canvas)
         drawText(canvas)
@@ -163,13 +165,14 @@ class CellInfoView : View {
             val barX = barRect.left + bar1 * (barRect.right - barRect.left) // X座標に変換
 
             // バー枠
-            barPaint.color = Color.DKGRAY
+            barPaint.color = ContextCompat.getColor(context, R.color.colorCellInfoBarFrame)
             canvas.drawRect(barPadRect, barPaint)
 
             when (Utils.getPreferenceString("dbmBarDesign", "default") ) {
                 "default" -> {
                     // バー背景
-                    barPaint.color = Color.LTGRAY
+                    barPaint.color = ContextCompat.getColor(context, R.color.colorCellInfoBarBg)
+
                     canvas.drawRect(barRect, barPaint)
 
                     // バー
@@ -244,7 +247,7 @@ class CellInfoView : View {
 
             // バーの中の RSRP値テキスト
             textBarPaint.textSize = barRect.bottom - barRect.top
-            textBarPaint.color = Color.BLACK
+            // 初期化済み textBarPaint.color = ContextCompat.getColor(context, R.color.colorCellInfoBarText)
             canvas.drawText(
                 "RSRP: $rsrp",
                 barRect.centerX(),
@@ -253,7 +256,8 @@ class CellInfoView : View {
             )
         } else {
             // 圏外
-            barPaint.color = Color.DKGRAY
+            // 機能してない風にするため、枠と同色
+            barPaint.color = ContextCompat.getColor(context, R.color.colorCellInfoBarFrame)
             canvas.drawRect(barRect, barPaint)
 
             // バーの中の 圏外テキスト
@@ -335,7 +339,7 @@ class CellInfoView : View {
             val cid = ci.cid and 65535
 
             val rsrp = if (css.dbm != CellInfo.UNAVAILABLE) css.dbm else null
-            val bgColor = Utils.getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+            val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)
 
             CellInfoViewVO(
                 rsrp,
@@ -356,6 +360,27 @@ class CellInfoView : View {
         drawCellInfoView(vo)
     }
 
+    fun getColorByMnc(mccString: String?, mncString: String?): Int {
+        return when (mccString) {
+            "440" -> {
+                when (mncString) {
+                    "11" -> ContextCompat.getColor(context, R.color.colorRakuten)
+                    "50", "51", "52", "53" -> ContextCompat.getColor(context, R.color.colorAu)
+                    "10" -> ContextCompat.getColor(context, R.color.colorDocomo)
+                    else -> ContextCompat.getColor(context, R.color.colorSoftbank)
+                }
+            }
+            "441" -> {
+                when (mncString) {
+                    "0" -> ContextCompat.getColor(context, R.color.colorSoftbank)
+                    "10" -> ContextCompat.getColor(context, R.color.colorAu)
+                    else -> ContextCompat.getColor(context, R.color.colorForeign)
+                }
+            }
+            else -> ContextCompat.getColor(context, R.color.colorForeign)
+        }
+    }
+
     // 4G
     private fun drawCellInfoView(cellInfo: CellInfoLte?) {
         if (cellInfo != null) {
@@ -368,7 +393,7 @@ class CellInfoView : View {
             val ta = cellInfo.timingAdvanceStr
 
             val rsrp = if (css.rsrp != CellInfo.UNAVAILABLE) css.rsrp else null
-            val bgColor = Utils.getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+            val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)
             val vo = CellInfoViewVO(
                 rsrp,
                 "eNB-LCID: ${enb}-${lcid}",
@@ -383,6 +408,7 @@ class CellInfoView : View {
     }
 
     // 5G
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun drawCellInfoView(cellInfo: CellInfoNr?) {
         val vo = if (cellInfo != null) {
             val cid = cellInfo.cellIdentity as CellIdentityNr
@@ -390,7 +416,7 @@ class CellInfoView : View {
             val bw = cellInfo.bandwidthStr
 
             val rsrp = if (css.csiRsrp != CellInfo.UNAVAILABLE) css.csiRsrp else null
-            val bgColor = Utils.getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+            val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)
             CellInfoViewVO(
                 rsrp,
                 "NCI: ${cid.nci}",

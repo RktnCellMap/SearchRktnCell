@@ -1,5 +1,6 @@
 package jp.tech4u.searchrktncell
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -185,7 +186,7 @@ class MyMapManager {
     }
 
     // 線を描いたら true を返す
-    fun drawLine(latlng: LatLng, logVO: LogVO, mMap: GoogleMap): Boolean {
+    fun drawLine(context : Context, latlng: LatLng, logVO: LogVO, mMap: GoogleMap): Boolean {
 
         removeLocLine()
 
@@ -197,7 +198,6 @@ class MyMapManager {
         myMapLL = placemark?.ll
 
         if (myMapLL != null) {
-            val context = MyApplication.getInstance()
             locLine = mMap.addPolyline(
                 PolylineOptions()
                     .add(latlng, myMapLL)

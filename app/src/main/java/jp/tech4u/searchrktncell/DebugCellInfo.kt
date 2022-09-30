@@ -26,7 +26,7 @@ class DebugCellInfo {
         //const val DISABLE_RADIO_INFO = true
         const val DISABLE_RADIO_INFO = false    // リリースはコレ
 
-        const val INTERVAL_MS = 100L        // 描画間隔[ms]
+        var INTERVAL_MS = 100L        // 描画間隔[ms]
         private const val DISTANCE = 20f    // プ0ロット間隔[m]
     }
 
@@ -37,15 +37,30 @@ class DebugCellInfo {
     private val distanceResult = FloatArray(3)
 
     fun init() {
-        val file = File(MyApplication.getInstance().externalCacheDir, DEBUG_LOAD_LOG_FILENAME)
-        Utils.readLog(file, logList)
-
-        // 電測表示テスト用
-        /*
-        logList.clear()
-        val logVO = LogVO(0,35.0,136.0,"440","11", 123, 123456*256+1, -88, 20*1000, 2)
-        logList.add(logVO)
-         */
+        if (DEBUG_LOAD_LOG_FILENAME != "") {
+            // ログファイルから取得版
+            val file = File(MyApplication.getInstance().externalCacheDir, DEBUG_LOAD_LOG_FILENAME)
+            Utils.readLog(file, logList)
+        } else {
+            // ハードコーディングでデータ1個版
+            logList.clear()
+            val logVO =
+                LogVO(
+                    0,
+                    35.715108863745385,
+                    139.51274338768738,
+                    "440",
+                    "11",
+                    123,
+                    279949 * 256 + 8,
+                    -88,
+                    20 * 1000,
+                    2,
+                    123
+                )
+            logList.add(logVO)
+            INTERVAL_MS = 3000
+        }
     }
 
     fun isAvailable() : Boolean {

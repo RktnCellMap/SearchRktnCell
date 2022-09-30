@@ -4,7 +4,6 @@ import android.graphics.Color
 import android.telephony.CellInfo
 import android.text.TextUtils
 import android.util.Log
-import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import com.google.android.gms.maps.model.LatLng
 import jp.tech4u.searchrktncell.MyApplication
@@ -132,27 +131,6 @@ object Utils {
         return Color.HSVToColor(floatArrayOf(h, s, v))
     }
 
-    fun getColorByMnc(mccString: String?, mncString: String?): Int {
-        val context = MyApplication.getInstance()
-        return when (mccString) {
-            "440" -> {
-                when (mncString) {
-                    "11" -> ContextCompat.getColor(context, R.color.colorRakuten)
-                    "50", "51", "52", "53" -> ContextCompat.getColor(context, R.color.colorAu)
-                    "10" -> ContextCompat.getColor(context, R.color.colorDocomo)
-                    else -> ContextCompat.getColor(context, R.color.colorSoftbank)
-                }
-            }
-            "441" -> {
-                when (mncString) {
-                    "0" -> ContextCompat.getColor(context, R.color.colorSoftbank)
-                    "10" -> ContextCompat.getColor(context, R.color.colorAu)
-                    else -> ContextCompat.getColor(context, R.color.colorForeign)
-                }
-            }
-            else -> ContextCompat.getColor(context, R.color.colorForeign)
-        }
-    }
 
     // 輝度(いわゆるYUVのY)を返す
     fun getLuminanceColor(color: Int): Int {
@@ -162,7 +140,7 @@ object Utils {
     // 背景色に負けない前景色(モノクロ)を返す
     fun getRevMonoColor(color: Int): Int {
         val y = getLuminanceColor(color)
-        return if (y < 128) R.color.colorMapObjFgRev else R.color.colorMapObjFg
+        return if (y < 128) R.color.colorThemeIndependentLight else R.color.colorThemeIndependentDark
     }
 
     fun getActiveMnc(cellInfoAry: List<CellInfo>): String? {

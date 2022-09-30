@@ -13,6 +13,19 @@
     </string-array>
 
     <!-- 表示用 -->
+    <string-array name="themeEntries">
+        <item>ライト</item>
+        <item>ダーク</item>
+        <item>システム デフォルト</item>
+    </string-array>
+    <!-- 内部KEY -->
+    <string-array name="themeEntryValues">
+        <item>MODE_NIGHT_NO</item>
+        <item>MODE_NIGHT_YES</item>
+        <item>MODE_NIGHT_FOLLOW_SYSTEM</item>
+    </string-array>
+
+    <!-- 表示用 -->
     <string-array name="dbmBarDesignEntries">
         <item>普通</item>
         <item>色の閾値がわかるやつ</item>
