@@ -71,6 +71,7 @@
     <SeekBarPreference
             app:key="headingUpSpeed"
             app:title="ヘディングアップ有効速度[km/h]"
+            android:summary="小さいほど過敏"
             android:max="20"
             app:min="1"
             android:defaultValue="10"
@@ -79,8 +80,9 @@
     <SeekBarPreference
             app:key="headingUpBearingAccuracyDegrees"
             app:title="ヘディングアップ有効方位精度[度]"
+            android:summary="大きいほど過敏"
             android:max="20"
-            app:min="1"
+            app:min="0"
             android:defaultValue="5"
             app:showSeekBarValue="true"
     />

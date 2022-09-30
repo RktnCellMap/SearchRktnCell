@@ -123,8 +123,11 @@ class RecordManager {
     }
 
     fun writeCsvLog(logVO: LogVO, logFile: File) {
-        val csvLine =
-            "${logVO.epoch},${logVO.lat},${logVO.lng},${logVO.mccString},${logVO.mncString},${logVO.tac},${logVO.ci},${logVO.rsrp},${logVO.bw},${logVO.ta},${logVO.pci}\n"
+        val csvLine = when (logVO.debug) {
+            null -> "${logVO.epoch},${logVO.lat},${logVO.lng},${logVO.mccString},${logVO.mncString},${logVO.tac},${logVO.ci},${logVO.rsrp},${logVO.bw},${logVO.ta},${logVO.pci}\n"
+            else -> "${logVO.epoch},${logVO.lat},${logVO.lng},${logVO.mccString},${logVO.mncString},${logVO.tac},${logVO.ci},${logVO.rsrp},${logVO.bw},${logVO.ta},${logVO.pci},"+
+                    "${logVO.debug!!.accuracy},${logVO.debug!!.bearing},${logVO.debug!!.bearingAccuracyDegrees},${logVO.debug!!.speed},${logVO.debug!!.speedAccuracyMetersPerSecond}\n"
+        }
         csvList.add(csvLine)
 
         val csvCacheCount = 10

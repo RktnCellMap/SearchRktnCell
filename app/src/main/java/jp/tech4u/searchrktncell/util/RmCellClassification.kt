@@ -291,23 +291,20 @@ class RmCellClassification {
         }
 
         fun getFgBgColor(ctx: Context, colorInt: Int, sector3: Int): Pair<Int, Int> {
-            return when (colorInt) {
+            val bgColor =  when (colorInt) {
                 -1 -> {
                     // マクロセル
-                    val bgColor = Utils.calcColor(-60, sector3, true)
+                    Utils.calcColor(-60, sector3, true)
 
-                    // bgColor の輝度から、fgColorを白か黒か選ぶ
-                    val fgColor = ContextCompat.getColor(ctx, Utils.getRevMonoColor(bgColor))
-                    bgColor to fgColor
                 }
                 else -> {
-                    // ピコ、屋内、Casa,移動
-                    // フェムトセルと言えば禿なので、この色
-                    val bgColor = ContextCompat.getColor(ctx, colorInt)
-                    val fgColor = ContextCompat.getColor(ctx, R.color.colorMapObjFg)
-                    bgColor to fgColor
+                    // ピコ、屋内、Casa、移動
+                    ContextCompat.getColor(ctx, colorInt)
                 }
             }
+            // bgColor の輝度から、fgColorを白か黒か選ぶ
+            val fgColor = ContextCompat.getColor(ctx, Utils.getRevMonoColor(bgColor))
+            return bgColor to fgColor
         }
     }
 }

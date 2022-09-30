@@ -12,6 +12,7 @@ class DebugCellInfo {
         private const val TAG = "DebugCellInfo"
         //const val DEBUG_CELL_INFO_ENABLE = true
         const val DEBUG_CELL_INFO_ENABLE = false    // リリースはコレ
+        const val USE_GPS_LOG = false               // リリースはコレ
 
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20201219_higasifushimi.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210105_higashiyamato_yamada_with_au.csv"

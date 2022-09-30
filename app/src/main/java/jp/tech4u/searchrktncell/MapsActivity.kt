@@ -9,6 +9,7 @@ import android.content.res.Resources
 import android.graphics.Typeface
 import android.graphics.drawable.Animatable
 import android.location.Location
+import android.location.LocationManager.PASSIVE_PROVIDER
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -44,6 +45,7 @@ import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
+import jp.tech4u.searchrktncell.data.DebugVO
 import jp.tech4u.searchrktncell.data.LogVO
 import jp.tech4u.searchrktncell.setting.SettingsActivity
 import jp.tech4u.searchrktncell.util.*
@@ -67,7 +69,6 @@ class MapsActivity : AppCompatActivity(),
     SharedPreferences.OnSharedPreferenceChangeListener {
 
     companion object {
-        private const val PERMISSION_REQUEST_CODE = 44011   // なんでもいい
         private const val MLS_JSON_FILENAME = "mls44011.json"
         private const val MLS_JSON_URL = "https://cellmap.rukihena.com/$MLS_JSON_FILENAME"
 
@@ -92,7 +93,8 @@ class MapsActivity : AppCompatActivity(),
     private val debugTimerHandler = Handler(Looper.getMainLooper())
     private val debugTimerRunnable: Runnable = object : Runnable {
         override fun run() {
-            onDataEvent(listOf(), LatLng(0.0, 0.0), lastLocation)
+            val dummyLocation = Location(PASSIVE_PROVIDER)
+            onDataEvent(listOf(), dummyLocation)
             debugTimerHandler.postDelayed(this, DebugCellInfo.INTERVAL_MS)
         }
     }
@@ -142,7 +144,6 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var darkMapStyle: MapStyleOptions
 
     // 最後に得た現在地（PhoneStateListenerで参照）
-    private var lastLatLng: LatLng? = null
     private var lastLocation: Location? = null
 
     // 現在地追従するかのフラグ
@@ -174,7 +175,9 @@ class MapsActivity : AppCompatActivity(),
         txtLatLng = findViewById(R.id.txtLatLng)
         txtDestination = findViewById(R.id.txtDestination)
         txtDebug = findViewById(R.id.txtDebug)
-        // txtDebug.visibility = View.VISIBLE   // デバッグ用
+        if ( DebugCellInfo.USE_GPS_LOG) {
+            txtDebug.visibility = View.VISIBLE   // デバッグ用
+        }
         scaleView = findViewById(R.id.scaleView)
         scaleView.metersOnly()
 
@@ -375,7 +378,7 @@ class MapsActivity : AppCompatActivity(),
     private fun startTinyNavigation(latLng: LatLng, persistence: Boolean = true) {
         stopTinyNavigation()
 
-        val markerBitmap = ResourcesCompat.getDrawable(resources, R.drawable.destination, null)?.toBitmap()
+        val markerBitmap = ResourcesCompat.getDrawable(resources, R.drawable.destination, null)!!.toBitmap()
         val markerIcon = BitmapDescriptorFactory.fromBitmap(markerBitmap)
         val title = "簡易ナビ目的地"
         //val snippet = "%.6f,%.6f".format(latLng.latitude, latLng.longitude)
@@ -391,7 +394,7 @@ class MapsActivity : AppCompatActivity(),
 
         txtDestination.visibility = View.VISIBLE
 
-        if ( persistence ) {
+        if (persistence) {
             val latLngStr = "${latLng.latitude},${latLng.longitude}"
             Utils.setPreferenceString("destination", latLngStr)
         }
@@ -459,8 +462,7 @@ class MapsActivity : AppCompatActivity(),
                 Configuration.ORIENTATION_LANDSCAPE -> supportActionBar!!.hide()
                 else -> supportActionBar!!.show()
             }
-        }
-        catch (e:Exception) {
+        } catch (e: Exception) {
             e.message?.let { Log.e(localClassName, it) }
         }
 
@@ -495,11 +497,19 @@ class MapsActivity : AppCompatActivity(),
             val location = locationResult.lastLocation
             location ?: return
 
+            // 30秒以上前のデータなら無視
+            if (location.time < System.currentTimeMillis() - 30 * 1000) return
+
+            //// 精度15m未満なら無視
+            //if (location.accuracy < 15) return
+
+            /*
             var pros = ""
             for (loc in locationResult.locations) {
                 pros += "-" + loc.provider
             }
             Log.d(localClassName, "onLocationResult$pros")
+             */
 
             onLocation(location)
         }
@@ -545,9 +555,8 @@ class MapsActivity : AppCompatActivity(),
                 // 楽天以外なら無視（DualSIM機で、他社をチラチラ拾ってしまうことがあるため）
                 return
             }
-            if (lastLatLng != null) {
-                val latlng = LatLng(lastLatLng!!.latitude, lastLatLng!!.longitude)
-                onDataEvent(cellInfo, latlng, lastLocation)
+            if (lastLocation != null) {
+                onDataEvent(cellInfo, lastLocation!!)
             }
         }
 
@@ -561,10 +570,9 @@ class MapsActivity : AppCompatActivity(),
             ) {
                 return
             }
-            if (lastLatLng != null) {
-                val latlng = LatLng(lastLatLng!!.latitude, lastLatLng!!.longitude)
+            if (lastLocation != null) {
                 val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
-                onDataEvent(tm.allCellInfo, latlng, lastLocation)
+                onDataEvent(tm.allCellInfo, lastLocation!!)
             }
         }
     }
@@ -580,7 +588,6 @@ class MapsActivity : AppCompatActivity(),
             // 現在地 初回
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latlng, 15f))
         }
-        lastLatLng = LatLng(location.latitude, location.longitude)
         lastLocation = location
         val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
         if (ActivityCompat.checkSelfPermission(
@@ -591,15 +598,15 @@ class MapsActivity : AppCompatActivity(),
             return
         }
         val cellInfoAry = tm.allCellInfo
-        onDataEvent(cellInfoAry, latlng, lastLocation)
+        onDataEvent(cellInfoAry, location)
     }
 
     // onLocation と PhoneStateListenerのイベントから呼ばれる
-    private fun onDataEvent(cellInfoAry: List<CellInfo>, pLatlng: LatLng, pLocation: Location?) {
+    private fun onDataEvent(cellInfoAry: List<CellInfo>, pLocation: Location) {
         val app = MyApplication.getInstance()
 
         // デバッグ用の表示（リリース時もこのまま残します）
-        if ( pLocation != null && txtDebug.visibility== View.VISIBLE) {
+        if (txtDebug.visibility == View.VISIBLE) {
             txtDebug.text = "Acc:%.1f\nDeg:%5.1f Acc:%5.1f\nSpd:%5.1f Acc:%5.1f".format(
                 pLocation.accuracy,
                 pLocation.bearing,
@@ -634,11 +641,11 @@ class MapsActivity : AppCompatActivity(),
 
                 latlng = LatLng(lvo.lat, lvo.lng)
             } else {
-                latlng = pLatlng
+                latlng = LatLng(pLocation.latitude, pLocation.longitude)
             }
         } else {
             // リリース版
-            latlng = pLatlng
+            latlng = LatLng(pLocation.latitude, pLocation.longitude)
             val activeMnc = Utils.getActiveMnc(cellInfoAry)
             for (cellInfo in cellInfoAry) {
                 // 処理しない条件
@@ -657,6 +664,14 @@ class MapsActivity : AppCompatActivity(),
                     cellInfo.tac, cellInfo.ci,
                     cellInfo.rsrp, cellInfo.bandwidth, cellInfo.timingAdvance, cellInfo.pci
                 )
+                if (DebugCellInfo.USE_GPS_LOG) {
+                    val debugVO = DebugVO(
+                        pLocation.accuracy,
+                        pLocation.bearing, pLocation.bearingAccuracyDegrees,
+                        pLocation.speed, pLocation.speedAccuracyMetersPerSecond
+                    )
+                    logVO.debug = debugVO
+                }
                 listLogVoNow.add(logVO)
             }
         }
@@ -690,12 +705,12 @@ class MapsActivity : AppCompatActivity(),
         }
 
         // 簡易ナビ（線を引くだけ）
-        if ( destinationLine != null ) {
+        if (destinationLine != null) {
             // 既に引かれていたらとりあえず消す
             destinationLine?.remove()
             destinationLine = null
         }
-        if ( destinationMarker!=null) {
+        if (destinationMarker != null) {
             val pattern = listOf(
                 Gap(20F), Dash(30F)
             )
@@ -707,8 +722,8 @@ class MapsActivity : AppCompatActivity(),
                     .pattern(pattern)
             )
             Location.distanceBetween(p1.latitude, p1.longitude, latlng.latitude, latlng.longitude, distanceResult)
-            val distanceStr = if ( distanceResult[0]<1000) {
-                (floor(distanceResult[0] / 10) * 10).toInt().toString()+ "m"
+            val distanceStr = if (distanceResult[0] < 1000) {
+                (floor(distanceResult[0] / 10) * 10).toInt().toString() + "m"
             } else {
                 (floor(distanceResult[0] / 100) / 10).toString() + "km"
             }
@@ -719,10 +734,7 @@ class MapsActivity : AppCompatActivity(),
 
         // 地図表示位置反映
         if (bMoveCurrentLocation) {
-            if (pLocation != null)
-                moveTo(latlng, pLocation.bearing, pLocation.bearingAccuracyDegrees, pLocation.speed)
-            else
-                moveTo(latlng)
+            moveTo(latlng, pLocation.bearing, pLocation.bearingAccuracyDegrees, pLocation.speed)
         }
     }
 
@@ -852,7 +864,7 @@ class MapsActivity : AppCompatActivity(),
     }
 
     // 地図の表示位置を現在地に移動する
-    private fun moveTo(latlng: LatLng, bearing:Float=0f, bearingAccuracyDegrees:Float=0f, speed:Float=0f) {
+    private fun moveTo(latlng: LatLng, bearing: Float = 0f, bearingAccuracyDegrees: Float = 0f, speed: Float = 0f) {
         val app = MyApplication.getInstance()
 
         btnGps.setImageResource(R.drawable.gps_fixed)

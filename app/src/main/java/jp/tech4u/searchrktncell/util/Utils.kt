@@ -9,6 +9,7 @@ import androidx.preference.PreferenceManager
 import com.google.android.gms.maps.model.LatLng
 import jp.tech4u.searchrktncell.MyApplication
 import jp.tech4u.searchrktncell.R
+import jp.tech4u.searchrktncell.data.DebugVO
 import jp.tech4u.searchrktncell.data.LogVO
 import java.io.*
 import java.lang.Integer.max
@@ -132,6 +133,28 @@ object Utils {
                         rows[8].toInt(),
                         rows[9].toInt(),
                         rows[10].toInt(),
+                    )
+                    logList.add(logVO)
+                }else if (rows.count() == 16) {
+                    val logVO = LogVO(
+                        rows[0].toInt(),
+                        rows[1].toDouble(),
+                        rows[2].toDouble(),
+                        rows[3],
+                        rows[4],
+                        rows[5].toInt(),
+                        rows[6].toLong(),
+                        rows[7].toInt(),
+                        rows[8].toInt(),
+                        rows[9].toInt(),
+                        rows[10].toInt(),
+                    )
+                    logVO.debug = DebugVO(
+                        rows[11].toFloat(),
+                        rows[12].toFloat(),
+                        rows[13].toFloat(),
+                        rows[14].toFloat(),
+                        rows[15].toFloat()
                     )
                     logList.add(logVO)
                 }
