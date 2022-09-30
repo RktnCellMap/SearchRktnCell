@@ -25,6 +25,10 @@
 
     <color name="colorMapObjBg">#A0FFFFFF</color>
     <color name="colorMapObjFg">#222222</color>
+    <color name="colorMapObjBgOff">#A0CCCCCC</color>
+    <color name="colorMapObjFgOff">#666666</color>
+
+    <color name="colorLayersMenuBg">#999999</color>
 
     <!-- テーマに依存しない、明暗色-->
     <color name="colorThemeIndependentDark">#222222</color>

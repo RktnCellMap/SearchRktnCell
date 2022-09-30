@@ -26,6 +26,19 @@
     </string-array>
 
     <!-- 表示用 -->
+    <string-array name="mapTypeEntries">
+        <item>デフォルト</item>
+        <item>航空写真</item>
+        <item>地形</item>
+    </string-array>
+    <!-- 内部KEY -->
+    <string-array name="mapTypeEntryValues">
+        <item>MAP_TYPE_NORMAL</item>
+        <item>MAP_TYPE_SATELLITE</item>
+        <item>MAP_TYPE_TERRAIN</item>
+    </string-array>
+
+    <!-- 表示用 -->
     <string-array name="dbmBarDesignEntries">
         <item>普通</item>
         <item>色の閾値がわかるやつ</item>

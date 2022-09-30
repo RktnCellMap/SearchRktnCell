@@ -8,10 +8,11 @@ import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.Matrix
 import android.graphics.Point
+import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.graphics.drawable.Animatable
 import android.location.Location
-import android.location.LocationManager.PASSIVE_PROVIDER
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -28,10 +29,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
-import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
@@ -62,12 +60,18 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import kotlin.math.*
+import android.widget.Toast
+
+
+
 
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
+    GoogleMap.OnMapClickListener,
     GoogleMap.OnMapLongClickListener,
     PopupMenu.OnMenuItemClickListener,
     GoogleMap.OnCameraMoveStartedListener,
+    GoogleMap.OnCameraMoveListener,
     GoogleMap.OnCameraIdleListener,
     //GoogleMap.OnMyLocationButtonClickListener,
     SharedPreferences.OnSharedPreferenceChangeListener {
@@ -101,7 +105,7 @@ class MapsActivity : AppCompatActivity(),
     private val debugTimerHandler = Handler(Looper.getMainLooper())
     private val debugTimerRunnable: Runnable = object : Runnable {
         override fun run() {
-            val dummyLocation = Location(PASSIVE_PROVIDER)
+            val dummyLocation = Location(LocationManager.PASSIVE_PROVIDER)
             onDataEvent(listOf(), dummyLocation)
             debugTimerHandler.postDelayed(this, DebugCellInfo.INTERVAL_MS)
         }
@@ -116,6 +120,9 @@ class MapsActivity : AppCompatActivity(),
     // UI部品
     private lateinit var cellInfoView: CellInfoView
     private lateinit var btnGps: ImageButton
+    private lateinit var btnCellFit: ImageButton
+    private lateinit var btnLayers: ImageButton
+    private lateinit var btnCompass: ImageButton
     private lateinit var imgLocationCenter: ImageView
     private lateinit var txtCellInfoEci: TextView
     private lateinit var txtCellInfoTac: TextView
@@ -124,6 +131,19 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var txtDestination: TextView
     private lateinit var txtDebug: TextView
     private lateinit var scaleView: MapScaleView
+    private lateinit var layoutLayers: LinearLayout
+    private lateinit var txtMapStandard: TextView
+    private lateinit var txtMapSatellite: TextView
+    private lateinit var txtMapTerrain: TextView
+    private lateinit var txtMapTraffic: TextView
+
+    private val btnMyMapAry = arrayOf(
+        R.id.btnMyMap1,
+        R.id.btnMyMap2,
+        R.id.btnMyMap3,
+        R.id.btnMyMap4,
+        R.id.btnMyMap5
+    )
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var powerConnectionReceiver: PowerConnectionReceiver
@@ -182,6 +202,8 @@ class MapsActivity : AppCompatActivity(),
     // デバッグ用
     private var bPress = false
 
+    private var myToast: Toast? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i(localClassName, "onCreate")
@@ -190,6 +212,9 @@ class MapsActivity : AppCompatActivity(),
 
         cellInfoView = findViewById(R.id.cellInfoView)
         btnGps = findViewById(R.id.btnGps)
+        btnCellFit = findViewById(R.id.btnCellFit)
+        btnLayers = findViewById(R.id.btnLayers)
+        btnCompass = findViewById(R.id.btnCompass)
         imgLocationCenter = findViewById(R.id.imgLocationCenter)
         txtCellInfoEci = findViewById(R.id.txtCellInfoEci)
         txtCellInfoTac = findViewById(R.id.txtCellInfoTac)
@@ -197,11 +222,16 @@ class MapsActivity : AppCompatActivity(),
         txtLatLng = findViewById(R.id.txtLatLng)
         txtDestination = findViewById(R.id.txtDestination)
         txtDebug = findViewById(R.id.txtDebug)
-        if ( DebugCellInfo.USE_GPS_LOG) {
+        if (DebugCellInfo.USE_GPS_LOG) {
             txtDebug.visibility = View.VISIBLE   // デバッグ用
         }
         scaleView = findViewById(R.id.scaleView)
         scaleView.metersOnly()
+        layoutLayers = findViewById(R.id.layoutLayers)
+        txtMapStandard = findViewById(R.id.txtMapStandard)
+        txtMapSatellite = findViewById(R.id.txtMapSatellite)
+        txtMapTerrain = findViewById(R.id.txtMapTerrain)
+        txtMapTraffic = findViewById(R.id.txtMapTraffic)
 
         telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
         initListener()
@@ -209,6 +239,7 @@ class MapsActivity : AppCompatActivity(),
         cellInfoView.setOnTouchListener(onTouchListener)
         btnGps.setOnClickListener { enableLocation() }
 
+        layoutLayers.visibility = View.INVISIBLE
 
         // Set up a default TextPaint object
         val typeface = Typeface.createFromAsset(this.assets, "Abel-Regular.ttf")
@@ -218,6 +249,9 @@ class MapsActivity : AppCompatActivity(),
 
         //btnGps.setImageResource(R.drawable.gps_not_fixed)
         (btnGps.drawable as Animatable).start()
+
+        changeBtnCellFit()
+        changeBtnCompass()
 
         // ダークテーマのマップスタイルを読み込む（反映はまだ）
         darkMapStyle = MapStyleOptions.loadRawResourceStyle(this, R.raw.dark_map)
@@ -276,7 +310,8 @@ class MapsActivity : AppCompatActivity(),
         return when (item.itemId) {
             R.id.menu_copy -> {
                 Log.d(localClassName, "copy:$txt")
-                val clipboardManager = applicationContext.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                val clipboardManager =
+                    applicationContext.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
                 clipboardManager.setPrimaryClip(ClipData.newPlainText("", txt))
                 Toast.makeText(applicationContext, "クリップボードにコピーしました", Toast.LENGTH_SHORT).show()
                 true
@@ -321,6 +356,8 @@ class MapsActivity : AppCompatActivity(),
             txtLatLng.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
             txtLatLng.setTextColor(ContextCompat.getColor(this, R.color.colorMapObjFg))
             btnGps.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
+            btnCellFit.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
+            btnLayers.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
 
 
         } catch (e: UninitializedPropertyAccessException) {
@@ -342,16 +379,23 @@ class MapsActivity : AppCompatActivity(),
         mMap.uiSettings.isMapToolbarEnabled = false
         // 現在地ボタン（見た目の変え方が分からんので独自ボタンを置いた）
         mMap.uiSettings.isMyLocationButtonEnabled = false
+        // 方位ボタン（見た目の変え方が分からんので独自ボタンを置いた）
+        mMap.uiSettings.isCompassEnabled = false
         // ズームボタン
         mMap.uiSettings.isZoomControlsEnabled = true
+
+        changeMapType()
+        changeMapLayer()
 
         //mMap.isMyLocationEnabled = true   // ←権限的にそう簡単にいかない・・・
         setMyLocationEnabled()  // 権限考慮版
 
         val density = resources.displayMetrics.density
         mMap.setPadding(0, (34 * density).toInt(), 0, (34 * density).toInt())
+        mMap.setOnMapClickListener(this)
         mMap.setOnMapLongClickListener(this)
         mMap.setOnCameraMoveStartedListener(this)
+        mMap.setOnCameraMoveListener(this)
         mMap.setOnCameraIdleListener(this)
         //mMap.setOnMyLocationButtonClickListener(this)
 
@@ -403,7 +447,8 @@ class MapsActivity : AppCompatActivity(),
     private fun startTinyNavigation(latLng: LatLng, persistence: Boolean = true) {
         stopTinyNavigation()
 
-        val markerBitmap = ResourcesCompat.getDrawable(resources, R.drawable.destination, null)!!.toBitmap()
+        val markerBitmap =
+            ResourcesCompat.getDrawable(resources, R.drawable.destination, null)!!.toBitmap()
         val markerIcon = BitmapDescriptorFactory.fromBitmap(markerBitmap)
         val title = "簡易ナビ目的地"
         //val snippet = "%.6f,%.6f".format(latLng.latitude, latLng.longitude)
@@ -546,21 +591,24 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-    private fun initListener(){
+    private fun initListener() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             cellInfoUpdateRequestCallback = object : CellInfoCallback() {
                 override fun onCellInfo(cellInfo: List<CellInfo>) {
                     if (cellInfo == null) {
-                        Log.d(LOGTAG_CELLINFO,"onCellInfo(): Null reported")
+                        Log.d(LOGTAG_CELLINFO, "onCellInfo(): Null reported")
                         return
                     } else {
-                        Log.d(LOGTAG_CELLINFO,"onCellInfo()")
+                        Log.d(LOGTAG_CELLINFO, "onCellInfo()")
                     }
                     try {
                         onCellUpdate(cellInfo)
                     } catch (ex: SecurityException) {
-                        Log.e(LOGTAG_CELLINFO, "onCellInfo(): Coarse location or phone permission is denied")
+                        Log.e(
+                            LOGTAG_CELLINFO,
+                            "onCellInfo(): Coarse location or phone permission is denied"
+                        )
                     }
                 }
 
@@ -596,7 +644,10 @@ class MapsActivity : AppCompatActivity(),
                             Manifest.permission.ACCESS_FINE_LOCATION
                         ) == PackageManager.PERMISSION_GRANTED
                     ) {
-                        telephonyManager.requestCellInfoUpdate(applicationContext.mainExecutor, cellInfoUpdateRequestCallback)
+                        telephonyManager.requestCellInfoUpdate(
+                            applicationContext.mainExecutor,
+                            cellInfoUpdateRequestCallback
+                        )
                     }
                 }
                 onLocation(location)
@@ -628,7 +679,7 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-    private fun onCellUpdate(cellInfo: List<CellInfo>){
+    private fun onCellUpdate(cellInfo: List<CellInfo>) {
         val activeMnc = Utils.getActiveMnc(cellInfo)
         if (activeMnc != "11") {
             // 楽天以外なら無視（DualSIM機で、他社をチラチラ拾ってしまうことがあるため）
@@ -697,7 +748,8 @@ class MapsActivity : AppCompatActivity(),
                 pLocation.bearing,
                 pLocation.bearingAccuracyDegrees,
                 pLocation.speed,
-                pLocation.speedAccuracyMetersPerSecond)
+                pLocation.speedAccuracyMetersPerSecond
+            )
         }
 
         val listLogVoNow = mutableListOf<LogVO>()
@@ -726,7 +778,7 @@ class MapsActivity : AppCompatActivity(),
 
                 latlng = LatLng(lvo.lat, lvo.lng)
 
-                if ( lvo.debug!=null) {
+                if (lvo.debug != null) {
                     pLocation.bearing = lvo.debug!!.bearing
                     pLocation.bearingAccuracyDegrees = lvo.debug!!.bearingAccuracyDegrees
                     pLocation.speed = lvo.debug!!.speed
@@ -771,13 +823,13 @@ class MapsActivity : AppCompatActivity(),
         //// 定期実行モノ
         val epoch = System.currentTimeMillis()
         // 現在地連動
-        if ( enableLocationEpoch!=0L && enableLocationEpoch < epoch ) {
+        if (enableLocationEpoch != 0L && enableLocationEpoch < epoch) {
             Log.d("CELLINFO", "enableLocation()")
             enableLocationEpoch = 0L
             enableLocation()
         }
         // ダミー通信(TA取得用)
-        if ( dummyCommunicationEpoch < epoch ) {
+        if (dummyCommunicationEpoch < epoch) {
             Log.d("CELLINFO", "dummyCommunication()")
             dummyCommunicationEpoch = epoch + 5 * 1000
             dummyCommunication()
@@ -829,7 +881,7 @@ class MapsActivity : AppCompatActivity(),
                     .color(ContextCompat.getColor(this, R.color.colorDestinationLine))
                     .pattern(pattern)
             )
-            val distance = SphericalUtil.computeDistanceBetween(p1,latlng);
+            val distance = SphericalUtil.computeDistanceBetween(p1, latlng);
             val distanceStr = if (distance < 1000) {
                 (floor(distance / 10) * 10).toInt().toString() + "m"
             } else {
@@ -885,7 +937,8 @@ class MapsActivity : AppCompatActivity(),
 
                         //// ECI(eNB)
                         val eciColor = RmCellClassification.getColor(enbInfo.second)
-                        val eciColors = RmCellClassification.getFgBgColor(ctx, eciColor, cell.sector3)
+                        val eciColors =
+                            RmCellClassification.getFgBgColor(ctx, eciColor, cell.sector3)
                         txtCellInfoEci.setBackgroundColor(eciColors.first)
                         txtCellInfoEci.setTextColor(eciColors.second)
                         txtCellInfoEci.text = "${cell.eNB}-${cell.sector} (${enbInfo.first})"
@@ -896,7 +949,8 @@ class MapsActivity : AppCompatActivity(),
                             tacInfo.second != 0 -> RmCellClassification.getColor(tacInfo.second)
                             else -> eciColor
                         }
-                        val tacColors = RmCellClassification.getFgBgColor(ctx, tacColor, cell.sector3)
+                        val tacColors =
+                            RmCellClassification.getFgBgColor(ctx, tacColor, cell.sector3)
                         txtCellInfoTac.setBackgroundColor(tacColors.first)
                         txtCellInfoTac.setTextColor(tacColors.second)
                         txtCellInfoTac.visibility = View.VISIBLE
@@ -904,7 +958,8 @@ class MapsActivity : AppCompatActivity(),
 
                         //// PCI
                         val pciColor = RmCellClassification.getColor(pciInfo.second)
-                        val pciColors = RmCellClassification.getFgBgColor(ctx, pciColor, cell.sector3)
+                        val pciColors =
+                            RmCellClassification.getFgBgColor(ctx, pciColor, cell.sector3)
                         txtCellInfoPci.setBackgroundColor(pciColors.first)
                         txtCellInfoPci.setTextColor(pciColors.second)
                         txtCellInfoPci.visibility = View.VISIBLE
@@ -913,8 +968,18 @@ class MapsActivity : AppCompatActivity(),
                     else -> {
                         // 基地局名表示
                         txtCellInfoEci.text = name
-                        txtCellInfoEci.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorMapObjBg))
-                        txtCellInfoEci.setTextColor(ContextCompat.getColor(ctx, R.color.colorMapObjFg))
+                        txtCellInfoEci.setBackgroundColor(
+                            ContextCompat.getColor(
+                                ctx,
+                                R.color.colorMapObjBg
+                            )
+                        )
+                        txtCellInfoEci.setTextColor(
+                            ContextCompat.getColor(
+                                ctx,
+                                R.color.colorMapObjFg
+                            )
+                        )
 
                         txtCellInfoTac.visibility = View.INVISIBLE
                         txtCellInfoPci.visibility = View.INVISIBLE
@@ -956,6 +1021,10 @@ class MapsActivity : AppCompatActivity(),
         Log.i(localClassName, "onOptionsItemSelected")
         Log.i(localClassName, item.toString())
 
+        if (layoutLayers.visibility == View.VISIBLE) {
+            layoutLayers.visibility = View.INVISIBLE
+        }
+
         when (item.itemId) {
             R.id.reloadMls -> scope.launch { readMls(false) }
             R.id.reloadMyMap -> reloadMyMap(true)
@@ -973,7 +1042,12 @@ class MapsActivity : AppCompatActivity(),
     }
 
     // 地図の表示位置を現在地に移動する
-    private fun moveTo(latlng: LatLng, bearing: Float = 0f, bearingAccuracyDegrees: Float = 0f, speed: Float = 0f) {
+    private fun moveTo(
+        latlng: LatLng,
+        bearing: Float = 0f,
+        bearingAccuracyDegrees: Float = 0f,
+        speed: Float = 0f
+    ) {
         val app = MyApplication.getInstance()
 
         btnGps.setImageResource(R.drawable.gps_fixed)
@@ -1026,7 +1100,7 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-    private fun cameraMoveLatLng(ll:LatLng) {
+    private fun cameraMoveLatLng(ll: LatLng) {
         mMap.animateCamera(
             CameraUpdateFactory.newLatLng(ll),
             cameraMoveDurationMs,
@@ -1034,7 +1108,7 @@ class MapsActivity : AppCompatActivity(),
         )
     }
 
-    private fun cameraMoveMultiPointNu(ll:LatLng, lls: List<LatLng>) {
+    private fun cameraMoveMultiPointNu(ll: LatLng, lls: List<LatLng>) {
         val llArea = LatLngArea(ll)
         lls.forEach {
             llArea.include(it)
@@ -1047,7 +1121,7 @@ class MapsActivity : AppCompatActivity(),
         )
     }
 
-    private fun addLlToPts(pts:MutableList<Float>, ll:LatLng) {
+    private fun addLlToPts(pts: MutableList<Float>, ll: LatLng) {
         val p = mMap.projection.toScreenLocation(ll)
         pts.add(p.x.toFloat())
         pts.add(p.y.toFloat())
@@ -1059,7 +1133,7 @@ class MapsActivity : AppCompatActivity(),
     private var markerB:Marker?=null
     private var markerL:Marker?=null
      */
-    private fun cameraMoveMultiPointHu(ll:LatLng, lls: List<LatLng>, bearing:Float) {
+    private fun cameraMoveMultiPointHu(ll: LatLng, lls: List<LatLng>, bearing: Float) {
         val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         val mapW = mapFragment.requireView().width
         val mapH = mapFragment.requireView().height
@@ -1134,7 +1208,7 @@ class MapsActivity : AppCompatActivity(),
         cameraMoveParam(centerLL, zoom, bearing)
     }
 
-    private fun cameraMoveParam(ll:LatLng, zoom:Float, bearing:Float) {
+    private fun cameraMoveParam(ll: LatLng, zoom: Float, bearing: Float) {
         val cameraPos = CameraPosition.Builder().target(ll).zoom(zoom).bearing(bearing).build()
         mMap.animateCamera(
             CameraUpdateFactory.newCameraPosition(cameraPos),
@@ -1174,7 +1248,8 @@ class MapsActivity : AppCompatActivity(),
     }
 
     private fun showRequestPermissionUI(permission: String) {
-        val shouldShow = shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
+        val shouldShow =
+            shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
         var msg = when (permission) {
             Manifest.permission.ACCESS_FINE_LOCATION -> "現在地を取得するため、位置情報の権限が必要です。"
             Manifest.permission.READ_PHONE_STATE -> "基地局情報を取得するため、電話の権限が必要です。本アプリは電話の権限を基地局情報の取得のみに用い、電話をかけるなどの操作は行いません。"
@@ -1195,7 +1270,8 @@ class MapsActivity : AppCompatActivity(),
             alertDialogBuilder.setPositiveButton(okBtnLabel) { dialog, which ->
                 // 本アプリの設定画面を開く
                 val packageUri = "package:jp.tech4u.searchrktncell"
-                val settingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse(packageUri))
+                val settingsIntent =
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse(packageUri))
                 settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(settingsIntent)
             }
@@ -1241,7 +1317,10 @@ class MapsActivity : AppCompatActivity(),
         mMap.isMyLocationEnabled = true
 
         // 権限が必要なので、ここでやる。
-        telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CELL_INFO or PhoneStateListener.LISTEN_SIGNAL_STRENGTHS)
+        telephonyManager.listen(
+            phoneStateListener,
+            PhoneStateListener.LISTEN_CELL_INFO or PhoneStateListener.LISTEN_SIGNAL_STRENGTHS
+        )
     }
 
     // 青ポチを表示する/しない
@@ -1398,6 +1477,12 @@ class MapsActivity : AppCompatActivity(),
     override fun onCameraIdle() {
         setTxtLatLng(false, mMap.cameraPosition.target)
         scaleView.update(mMap.cameraPosition.zoom, mMap.cameraPosition.target.latitude)
+
+        btnCompass.rotation = -mMap.cameraPosition.bearing
+    }
+
+    override fun onCameraMove() {
+        btnCompass.rotation = -mMap.cameraPosition.bearing
     }
 
     private fun resetLocationTimer() {
@@ -1441,7 +1526,7 @@ class MapsActivity : AppCompatActivity(),
                 val latlng = LatLng(it.latitude, it.longitude)
                 moveTo(latlng)
             } else {
-                if ( !retryLocation ) {
+                if (!retryLocation) {
                     // 特定できなかったので、もう一度呼ぶ
                     retryLocation = true
                     Log.d(localClassName, "ONE MORE enableLocation()")
@@ -1460,13 +1545,20 @@ class MapsActivity : AppCompatActivity(),
 
             when (key) {
                 "refreshInterval" -> {
-                    Log.i(localClassName, "onSharedPreferenceChanged(" + sharedPreferences.getInt(key, -1) + ",$key)")
+                    Log.i(
+                        localClassName,
+                        "onSharedPreferenceChanged(" + sharedPreferences.getInt(key, -1) + ",$key)"
+                    )
                     // 一旦止めて再度動かすことで、更新間隔を反映する
                     stopLocationUpdates()
                     startLocationUpdates()
                 }
                 "keepScreenOn" -> powerConnectionReceiver.setScreenOn()
                 "locationTimer", "locationTimerSecs" -> resetLocationTimer()
+                "locationMode" -> changeBtnCellFit()
+                "headingUp" -> changeBtnCompass()
+                "mapType" -> changeMapType()
+                "mapLayerTraffic" -> changeMapLayer()
                 "plotPartner", "plotMyMapCell", "excludeTac" -> {
                     initRecordManager()
                     app.recordManager.rePlot(mMap)
@@ -1505,5 +1597,193 @@ class MapsActivity : AppCompatActivity(),
             // ということから、任意の設定をいじったら必ずやることにした)
             prevDisplayedCell = -1
         }
+    }
+
+    fun onClickBtnCellFit(view: android.view.View) {
+        // 現在地追従モードが基地局連動かどうか
+        val bMode = !Utils.getPreferenceBoolean("locationMode", true)
+        Utils.setPreferenceBoolean("locationMode", bMode)
+        changeBtnCellFit(bMode)
+        if (bMode) {
+            myToastShow("基地局が見えるよう拡縮", Toast.LENGTH_SHORT)
+        } else {
+            myToastShow("拡縮しない", Toast.LENGTH_SHORT)
+        }
+    }
+
+    private fun changeBtnCellFit(bMode: Boolean? = null) {
+        val bMode2 = bMode ?: Utils.getPreferenceBoolean("locationMode", false)
+        val icon = if (bMode2) R.drawable.focus_on else R.drawable.focus_off
+        btnCellFit.setImageResource(icon)
+    }
+
+    fun onClickBtnLayers(view: android.view.View) {
+        if (layoutLayers.visibility == View.VISIBLE) {
+            layoutLayers.visibility = View.INVISIBLE
+        } else {
+            setMapLayersBtnOnOff()
+
+            val app = MyApplication.getInstance()
+            for ((index, keyName) in app.myMapManager.myMapUrlKeys.withIndex()) {
+                var btnMyMap: View = findViewById(btnMyMapAry[index])
+                var midOrKmz = Utils.getMyMapKmzUrl(keyName)
+                if (midOrKmz != "") {
+                    btnMyMap.visibility = View.VISIBLE
+                    setViewOnOff(Utils.checkMyMapMid(keyName), btnMyMap)
+                } else {
+                    btnMyMap.visibility = View.INVISIBLE
+                }
+            }
+
+            layoutLayers.visibility = View.VISIBLE
+        }
+    }
+
+    private fun setMapLayersBtnOnOff() {
+        setViewOnOff(mMap.mapType == GoogleMap.MAP_TYPE_NORMAL, txtMapStandard)
+        setViewOnOff(mMap.mapType == GoogleMap.MAP_TYPE_SATELLITE, txtMapSatellite)
+        setViewOnOff(mMap.mapType == GoogleMap.MAP_TYPE_TERRAIN, txtMapTerrain)
+        setViewOnOff(mMap.isTrafficEnabled, txtMapTraffic)
+    }
+
+    private fun setViewOnOff(on: Boolean, view: View) {
+        val bg = if (on) R.color.colorMapObjBg else R.color.colorMapObjBgOff
+        view.setBackgroundColor(ContextCompat.getColor(this, bg))
+
+        val fg = if (on) R.color.colorMapObjFg else R.color.colorMapObjFgOff
+        if (view is ImageButton) {
+            view.setColorFilter(ContextCompat.getColor(this, fg), PorterDuff.Mode.SRC_IN)
+        }
+        if (view is TextView) {
+            view.setTextColor(ContextCompat.getColor(this, fg))
+        }
+    }
+
+    override fun onMapClick(p0: LatLng) {
+        if (layoutLayers.visibility == View.VISIBLE) {
+            layoutLayers.visibility = View.INVISIBLE
+        }
+    }
+
+    fun onClickBtnCompass(view: android.view.View) {
+        // ヘディングアップすべきかどうか
+        val headingUp = !Utils.getPreferenceBoolean("headingUp", false)
+        Utils.setPreferenceBoolean("headingUp", headingUp)
+        changeBtnCompass(headingUp)
+
+        if (headingUp) {
+            myToastShow("ヘディングアップ", Toast.LENGTH_SHORT)
+        } else {
+            myToastShow("ノースアップ", Toast.LENGTH_SHORT)
+            // すぐにノースアップにする
+            if (mMap.cameraPosition.bearing != 0f) {
+                val ll = mMap.cameraPosition.target
+                val zoom = mMap.cameraPosition.zoom
+                val cameraPos = CameraPosition.Builder().target(ll).zoom(zoom).bearing(0f).build()
+                mMap.animateCamera(
+                    CameraUpdateFactory.newCameraPosition(cameraPos),
+                    cameraMoveDurationMs,
+                    null
+                )
+            }
+        }
+    }
+
+    private fun changeBtnCompass(headingUp: Boolean? = null) {
+        val headingUp2 = headingUp ?: Utils.getPreferenceBoolean("headingUp", false)
+        val icon = if (headingUp2) R.drawable.compass else R.drawable.northup
+        btnCompass.setImageResource(icon)
+    }
+
+    fun onClickMapStandard(view: android.view.View) {
+        val mapType = "MAP_TYPE_NORMAL"
+        Utils.setPreferenceString("mapType", mapType)
+        changeMapType(mapType)
+    }
+
+    fun onClickMapSatellite(view: android.view.View) {
+        val mapType = "MAP_TYPE_SATELLITE"
+        Utils.setPreferenceString("mapType", mapType)
+        changeMapType(mapType)
+    }
+
+    fun onClickMapTerrain(view: android.view.View) {
+        val mapType = "MAP_TYPE_TERRAIN"
+        Utils.setPreferenceString("mapType", mapType)
+        changeMapType(mapType)
+    }
+
+    private fun changeMapType(mapType: String? = null) {
+        val mapType2 = mapType ?: Utils.getPreferenceString("mapType", "MAP_TYPE_NORMAL")
+        if (mapType2 == "MAP_TYPE_SATELLITE") {
+            mMap.mapType = GoogleMap.MAP_TYPE_SATELLITE
+        } else if (mapType2 == "MAP_TYPE_TERRAIN") {
+            mMap.mapType = GoogleMap.MAP_TYPE_TERRAIN
+        } else /*if (mapType2 == "MAP_TYPE_NORMAL") */ {
+            mMap.mapType = GoogleMap.MAP_TYPE_NORMAL
+        }
+        setMapLayersBtnOnOff()
+    }
+
+    fun onClickMapTraffic(view: android.view.View) {
+        val bTraffic = !mMap.isTrafficEnabled
+        Utils.setPreferenceBoolean("mapLayerTraffic", bTraffic)
+        changeMapLayer(bTraffic)
+    }
+
+    private fun changeMapLayer(bTraffic: Boolean? = null) {
+        val bTraffic2 = bTraffic ?: Utils.getPreferenceBoolean("mapLayerTraffic", false)
+        mMap.isTrafficEnabled = bTraffic2
+        setMapLayersBtnOnOff()
+    }
+
+    fun onClickMyMap1(view: android.view.View) {
+        myMapOnOff(0)
+    }
+
+    fun onClickMyMap2(view: android.view.View) {
+        myMapOnOff(1)
+    }
+
+    fun onClickMyMap3(view: android.view.View) {
+        myMapOnOff(2)
+    }
+
+    fun onClickMyMap4(view: android.view.View) {
+        myMapOnOff(3)
+    }
+
+    fun onClickMyMap5(view: android.view.View) {
+        myMapOnOff(4)
+    }
+
+    private fun myMapOnOff(index: Int) {
+        var btnMyMap: View = findViewById(btnMyMapAry[index])
+        val app = MyApplication.getInstance()
+        val key = app.myMapManager.myMapUrlKeys[index]
+        val keyE = key + "Enable"
+
+        val enable = !Utils.getPreferenceBoolean(keyE, false)
+        Utils.setPreferenceBoolean(keyE, enable)
+
+        setViewOnOff(enable, btnMyMap)
+
+        if (Utils.checkMyMapMid(key)) {
+            scope.launch {
+                reloadMyMap(index, key, false)
+            }
+        } else {
+            app.myMapManager.clearMyMap(index)
+        }
+    }
+
+    private fun myToastShow(text: CharSequence, duration: Int) {
+        myToast?.cancel()
+        myToast = Toast.makeText(applicationContext, text, duration)
+        myToast?.show()
+    }
+
+    fun onClickDummy(view: android.view.View) {
+        // 裏を押さないようにするためのダミー
     }
 }

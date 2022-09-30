@@ -93,6 +93,22 @@
             app:showSeekBarValue="true"
     />
 
+    <DropDownPreference
+            app:key="mapType"
+            app:title="地図の種類"
+            app:entries="@array/mapTypeEntries"
+            app:entryValues="@array/mapTypeEntryValues"
+            android:defaultValue="MAP_TYPE_NORMAL"
+            app:useSimpleSummaryProvider="true"
+            />
+    <SwitchPreference
+            app:key="mapLayerTraffic"
+            app:title="交通状況"
+            android:summaryOn="表示"
+            android:summaryOff="非表示"
+            android:defaultValue="false"
+            />
+
     <EditTextPreference
             app:key="myMapUrl"
             app:title="Googleマイマップ URL"

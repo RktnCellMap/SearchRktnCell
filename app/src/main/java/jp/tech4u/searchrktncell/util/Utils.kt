@@ -324,4 +324,12 @@ object Utils {
         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
         return sharedPreferences.getBoolean(key, default)
     }
+
+    fun setPreferenceBoolean(key: String, value: Boolean) {
+        val context = MyApplication.getInstance()
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        sharedPreferences.edit()
+            .putBoolean(key, value)
+            .commit()
+    }
 }
