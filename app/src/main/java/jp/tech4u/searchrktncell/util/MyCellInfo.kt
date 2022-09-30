@@ -75,6 +75,18 @@ val CellInfo.ci: Long
             CellInfo.UNAVAILABLE_LONG
         }
 
+val CellInfo.pci: Int
+    get() =
+        if (this is CellInfoLte) {
+            cellIdentity.pci
+        } else if (29 <= Build.VERSION.SDK_INT && this is CellInfoNr) {
+            val cellIdentityNr = cellIdentity as CellIdentityNr
+            cellIdentityNr.pci
+        } else if (this is CellInfoWcdma) {
+            cellIdentity.psc
+        } else {
+            CellInfo.UNAVAILABLE
+        }
 
 val CellInfo.bandwidth: Int
     get() =
@@ -96,6 +108,13 @@ val CellInfo.bandwidth: Int
             }
             else -> CellInfo.UNAVAILABLE
         }
+
+val CellInfo.bandwidthStr: String
+    get() =if (bandwidth != CellInfo.UNAVAILABLE) {
+        (bandwidth / 1000).toString() + "MHz"
+    } else {
+        "-"
+    }
 
 //// CellSignalStrength ////
 
@@ -119,4 +138,9 @@ val CellInfo.timingAdvance: Int
             else -> CellInfo.UNAVAILABLE
         }
 
-
+val CellInfo.timingAdvanceStr: String
+    get() =if (timingAdvance != CellInfo.UNAVAILABLE) {
+        timingAdvance.toString()
+    } else {
+        "-"
+    }

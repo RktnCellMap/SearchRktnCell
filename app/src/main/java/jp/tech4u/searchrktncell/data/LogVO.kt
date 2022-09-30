@@ -1,5 +1,6 @@
 package jp.tech4u.searchrktncell.data
 
+import android.telephony.CellInfo
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 
 @JsonIgnoreProperties(ignoreUnknown=true)
@@ -14,4 +15,15 @@ data class LogVO (
     val rsrp: Int = 0,
     val bw: Int = 0,
     val ta: Int = 0,
+    val pci: Int = 0,
+) {
+    fun bwStr() = if (this.bw == CellInfo.UNAVAILABLE) "-" else "${this.bw / 1000}MHz"
+    fun taStr() = if (this.ta == CellInfo.UNAVAILABLE) "-" else this.ta.toString()
+}
+
+@JsonIgnoreProperties(ignoreUnknown=true)
+data class SensorVO (
+    val accuracy: Float = 0f,
+    val bearing: Float = 0f,
+    val bearingAccuracyDegrees: Float = 0f,
 )

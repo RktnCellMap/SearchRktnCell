@@ -20,6 +20,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.github.pengrad.mapscaleview.MapScaleView
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -30,6 +31,7 @@ import com.google.android.gms.maps.model.*
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
 import jp.tech4u.searchrktncell.data.LogVO
+import jp.tech4u.searchrktncell.data.MarkerTag
 import jp.tech4u.searchrktncell.setting.SettingsActivity
 import jp.tech4u.searchrktncell.util.*
 import kotlinx.coroutines.CoroutineScope
@@ -42,13 +44,14 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
 
-
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
     PopupMenu.OnMenuItemClickListener,
     GoogleMap.OnCameraMoveStartedListener,
     GoogleMap.OnCameraIdleListener,
-    GoogleMap.OnMyLocationButtonClickListener,
+    //GoogleMap.OnMyLocationButtonClickListener,
+    GoogleMap.OnInfoWindowClickListener,
+    GoogleMap.OnInfoWindowCloseListener ,
     SharedPreferences.OnSharedPreferenceChangeListener {
 
     companion object {
@@ -56,11 +59,12 @@ class MapsActivity : AppCompatActivity(),
         private const val MLS_JSON_FILENAME = "mls44011.json"
         private const val MLS_JSON_URL = "https://cellmap.rukihena.com/$MLS_JSON_FILENAME"
 
-        private lateinit var instance: MapsActivity
-
         // 地図表示初期位置
-        private val initialMapPos = LatLng(36.0, 140.0)
-        private const val initialMapZoom = 7f
+        private const val INITIAL_MAP_LAT = 36.0
+        private const val INITIAL_MAP_LNG = 140.0
+        private const val INITIAL_MAP_ZOOM = 7f
+
+        private lateinit var instance: MapsActivity
 
         // root_preferences.xml のマイマップ定義の個数と合わせてください
         private val myMapUrlKeys = arrayOf("myMapUrl", "myMapUrl2", "myMapUrl3", "myMapUrl4", "myMapUrl5")
@@ -79,9 +83,7 @@ class MapsActivity : AppCompatActivity(),
     private val debugTimerHandler = Handler(Looper.getMainLooper())
     private val debugTimerRunnable: Runnable = object : Runnable {
         override fun run() {
-            if (!bPress) {
-                onDataEvent(listOf(), LatLng(0.0, 0.0))
-            }
+            onDataEvent(listOf(), LatLng(0.0, 0.0))
             debugTimerHandler.postDelayed(this, DebugCellInfo.INTERVAL_MS)
         }
     }
@@ -182,17 +184,17 @@ class MapsActivity : AppCompatActivity(),
     }
 
     override fun onMenuItemClick(item: MenuItem): Boolean {
-        val txt = txtLatLng.text;
+        val txt = txtLatLng.text
         return when (item.itemId) {
             R.id.menu_copy -> {
-                Log.d(localClassName, "copy:" + txt);
+                Log.d(localClassName, "copy:$txt")
                 val clipboardManager = applicationContext.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
                 clipboardManager.setPrimaryClip(ClipData.newPlainText("", txt))
                 Toast.makeText(applicationContext, "クリップボードにコピーしました", Toast.LENGTH_SHORT).show()
                 true
             }
             R.id.menu_open_map_app -> {
-                Log.d(localClassName, "map:" + txt);
+                Log.d(localClassName, "map:$txt")
                 val gmmIntentUri = Uri.parse("geo:$txt")
                 val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
                 mapIntent.setPackage("com.google.android.apps.maps")
@@ -222,9 +224,12 @@ class MapsActivity : AppCompatActivity(),
         mMap.setPadding(0, (34 * density).toInt(), 0, (34 * density).toInt())
         mMap.setOnCameraMoveStartedListener(this)
         mMap.setOnCameraIdleListener(this)
-        mMap.setOnMyLocationButtonClickListener(this)
+        //mMap.setOnMyLocationButtonClickListener(this)
+        mMap.setOnInfoWindowCloseListener(this)
+        mMap.setOnInfoWindowClickListener(this)
 
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialMapPos, initialMapZoom))
+        val initLatLng = LatLng(INITIAL_MAP_LAT, INITIAL_MAP_LNG)
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initLatLng, INITIAL_MAP_ZOOM))
 
         readLogAndPutMarker()
         reloadMyMap(false)
@@ -287,6 +292,12 @@ class MapsActivity : AppCompatActivity(),
             val location = locationResult.lastLocation
             location ?: return
 
+            var pros = ""
+            for (loc in locationResult.locations) {
+                pros += "-" + loc.provider
+            }
+            Log.d(localClassName, "onLocationResult$pros")
+
             onLocation(location)
         }
     }
@@ -297,7 +308,7 @@ class MapsActivity : AppCompatActivity(),
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 Log.i(localClassName, "Action was DOWN")
-                bPress = true
+                bPress = !bPress
                 true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -306,17 +317,14 @@ class MapsActivity : AppCompatActivity(),
             }
             MotionEvent.ACTION_UP -> {
                 Log.i(localClassName, "Action was UP")
-                bPress = false
                 true
             }
             MotionEvent.ACTION_CANCEL -> {
                 Log.i(localClassName, "Action was CANCEL")
-                bPress = false
                 true
             }
             MotionEvent.ACTION_OUTSIDE -> {
                 Log.i(localClassName, "Movement occurred outside bounds of current screen element")
-                bPress = false
                 true
             }
             else -> onTouchEvent(event)
@@ -356,7 +364,7 @@ class MapsActivity : AppCompatActivity(),
         val latlng = LatLng(location.latitude, location.longitude)
         Log.v(localClassName, "onLocation ${latlng.latitude} , ${latlng.longitude}")
 
-        if (mMap.cameraPosition.zoom == initialMapZoom) {
+        if (mMap.cameraPosition.zoom == INITIAL_MAP_ZOOM) {
             // 現在地 初回
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latlng, 15f))
         }
@@ -374,12 +382,13 @@ class MapsActivity : AppCompatActivity(),
         val latlng: LatLng
         // デバッグならそれから、そうでなければ引数から採用
         if (debugCellInfo != null && debugCellInfo!!.isAvailable()) {
+            if (bPress) return
             // デバッグ版
             debugCellInfo!!.getLog(listLogVoNow)
             if (listLogVoNow.size != 0) {
                 val lvo = listLogVoNow[0]
-                val bw = if (lvo.bw == CellInfo.UNAVAILABLE) "-" else "${lvo.bw / 1000}MHz"
-                val ta = if (lvo.ta == CellInfo.UNAVAILABLE) "-" else lvo.ta.toString()
+                val bw = lvo.bwStr()
+                val ta = lvo.taStr()
                 val bgColor = Utils.getColorByMnc(lvo.mccString, lvo.mncString)
                 val cvo = CellInfoViewVO(
                     if (lvo.rsrp < 0) lvo.rsrp else null,
@@ -389,9 +398,7 @@ class MapsActivity : AppCompatActivity(),
                     bgColor
                 )
                 cellInfoView.drawCellInfoView(cvo)
-                val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
-                val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
-                app.recordManager.plotAndLog(mMap, lvo, bPlotPartner, bPlotMyMapCell)
+                app.recordManager.plotAndLog(mMap, lvo)
 
                 latlng = LatLng(lvo.lat, lvo.lng)
             } else {
@@ -415,7 +422,7 @@ class MapsActivity : AppCompatActivity(),
                     latlng.latitude, latlng.longitude,
                     cellInfo.mccString, cellInfo.mncString,
                     cellInfo.tac, cellInfo.ci,
-                    cellInfo.rsrp, cellInfo.bandwidth, cellInfo.timingAdvance
+                    cellInfo.rsrp, cellInfo.bandwidth, cellInfo.timingAdvance, cellInfo.pci
                 )
                 listLogVoNow.add(logVO)
             }
@@ -426,10 +433,7 @@ class MapsActivity : AppCompatActivity(),
             lastLogVO = logVO
 
             // 記録
-            val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
-            val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
-
-            app.recordManager.plotAndLog(mMap, logVO, bPlotPartner, bPlotMyMapCell)
+            app.recordManager.plotAndLog(mMap, logVO)
 
             val logFile = createLogFileObj()
             app.recordManager.writeCsvLog(logVO, logFile)
@@ -453,14 +457,44 @@ class MapsActivity : AppCompatActivity(),
         }
 
         if (Utils.getPreferenceBoolean("displayCellName", true)) {
-            if (lastLogVO != null) {
-                txtCellName.text = app.myMapManager.getName(lastLogVO.ci)
+            if (lastLogVO != null && "440" == lastLogVO.mccString && "11" == lastLogVO.mncString) {
+                val ctx = applicationContext
+                val name = app.myMapManager.getName(lastLogVO.ci)
+                when (name) {
+                    null -> txtCellName.text = ""
+                    "" -> {
+                        val cell = CellId(lastLogVO.ci)
+                        if (cell.sector in 1..12) {
+                            txtCellName.text = "${lastLogVO.tac} ${cell.eNB}-${cell.sector}"
+                            val bgColor = Utils.calcColor(-70, cell.sector3, true)
+
+                            // bgColor の明度から、fgColorを白か黒か選ぶ
+                            val hsv = FloatArray(3)
+                            Color.colorToHSV(bgColor, hsv)
+                            val rFgColor = if (hsv[2] < 0.5) R.color.colorMapObjFg else R.color.colorMapObjFgRev
+                            val fgColor = ContextCompat.getColor(ctx, rFgColor)
+
+                            txtCellName.setBackgroundColor(bgColor)
+                            txtCellName.setTextColor(fgColor)
+                        } else {
+                            txtCellName.text = "フェムトセル？"
+                            // フェムトセルと言えば禿なので、この色
+                            txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorSoftbank))
+                        }
+                    }
+                    else -> {
+                        txtCellName.text = name
+                        txtCellName.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorMapObjBg))
+                    }
+                }
             } else {
                 txtCellName.text = ""
             }
         } else {
             txtCellName.text = ""
         }
+
+        // 名前が""なら非表示にする
         txtCellName.visibility = if (txtCellName.text == "") View.INVISIBLE else View.VISIBLE
 
         // 地図表示位置反映
@@ -556,10 +590,13 @@ class MapsActivity : AppCompatActivity(),
     private fun readLogAndPutMarker() {
         Log.i(localClassName, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊readLogAndPutMarker")
         val app = MyApplication.getInstance()
+
+        //TODO
+        val file = File(applicationContext.externalCacheDir, "log_20210105_higashiyamato_yamada.csv")
+        app.recordManager.readLog(file)
+
         app.recordManager.readLog(createLogFileObj())
-        val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
-        val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
-        app.recordManager.plotAll(mMap, CellId(0), bPlotPartner, bPlotMyMapCell)
+        app.recordManager.plotAll(mMap)
     }
 
     private fun requestPermission() {
@@ -656,7 +693,7 @@ class MapsActivity : AppCompatActivity(),
     }
 
     // 青ポチを表示する/しない
-    private fun setMyLocation(enable:Boolean) {
+    private fun setMyLocation(enable: Boolean) {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
             && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -705,7 +742,7 @@ class MapsActivity : AppCompatActivity(),
                     app.myMapManager.plotPlacemark(index, app.mMap)
                     val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
                     if (!bPlotMyMapCell) {
-                        // マイマップが判明したので、消さなきゃいけない場合があるので、リプロットする
+                        // マイマップが判明したら消さなきゃいけない場合があるので、リプロットする
                         app.recordManager.rePlot(app.mMap)
                     }
                 } else {
@@ -801,13 +838,16 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
+    // ボタンを自力にしたので廃止
+    /*
     override fun onMyLocationButtonClick(): Boolean {
         Log.i(localClassName, "onMyLocationButtonClick")
         enableLocation()
         return false
     }
+    */
 
-    private fun setTxtLatLng(gps:Boolean, latlng: LatLng) {
+    private fun setTxtLatLng(gps: Boolean, latlng: LatLng) {
         txtLatLng.text = "%.6f,%.6f".format(latlng.latitude, latlng.longitude)
     }
 
@@ -817,13 +857,20 @@ class MapsActivity : AppCompatActivity(),
         btnGps.setImageResource(R.drawable.gps_not_fixed)
         (btnGps.drawable as Animatable).start()
 
-        fusedLocationClient.lastLocation
-            .addOnSuccessListener {
-                if (it != null) {
-                    val latlng = LatLng(it.latitude, it.longitude)
-                    moveTo(latlng)
-                }
+        Log.d(localClassName, "enableLocation")
+
+        fusedLocationClient.lastLocation.addOnSuccessListener {
+            // 前回の現在地
+            if (it != null) {
+                Log.d(localClassName, "lastLocation"+it.provider)
+                val latlng = LatLng(it.latitude, it.longitude)
+                moveTo(latlng)
+            } else {
+                // 特定できなかったので、もう一度呼ぶ
+                Log.d(localClassName, "ONE MORE enableLocation()")
+                enableLocation()
             }
+        }
 
         // 現在地連動タイマーがONなら解除・・・は、いらないかな。（無駄に呼ばれても副作用はなさそう）
     }
@@ -864,5 +911,22 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
         }
+    }
+
+    override fun onInfoWindowClick(marker: Marker) {
+        val markerTag = marker.tag as MarkerTag
+        Log.d(localClassName, "onInfoWindowClick - ${markerTag.logVO.ci}")
+
+        val app = MyApplication.getInstance()
+        app.recordManager.setCaptureCi(markerTag.logVO.ci)
+        app.recordManager.hoge(mMap)
+    }
+
+    override fun onInfoWindowClose(marker: Marker) {
+        Log.d(localClassName, "onInfoWindowClose")
+
+        val app = MyApplication.getInstance()
+        app.recordManager.setCaptureCi(0L)
+        app.recordManager.hoge(mMap)
     }
 }

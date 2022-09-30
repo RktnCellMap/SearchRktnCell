@@ -10,10 +10,7 @@ import android.util.Log
 import android.view.View
 import androidx.core.content.ContextCompat
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
-import jp.tech4u.searchrktncell.util.Utils
-import jp.tech4u.searchrktncell.util.bandwidth
-import jp.tech4u.searchrktncell.util.mccString
-import jp.tech4u.searchrktncell.util.mncString
+import jp.tech4u.searchrktncell.util.*
 import kotlin.math.max
 import kotlin.math.min
 
@@ -366,22 +363,16 @@ class CellInfoView : View {
             val css = cellInfo.cellSignalStrength
             val enb = cid.ci ushr 8
             val lcid = cid.ci and 255
-            val bw = cellInfo.bandwidth
 
-            val bwStr = if (bw != CellInfo.UNAVAILABLE) {
-                (bw / 1000).toString() + "MHz"
-            } else {
-                "-"
-            }
-            val ta =
-                if (css.timingAdvance != CellInfo.UNAVAILABLE) css.timingAdvance.toString() else "-"
+            val bw = cellInfo.bandwidthStr
+            val ta = cellInfo.timingAdvanceStr
 
             val rsrp = if (css.rsrp != CellInfo.UNAVAILABLE) css.rsrp else null
             val bgColor = Utils.getColorByMnc(cellInfo.mccString, cellInfo.mncString)
             val vo = CellInfoViewVO(
                 rsrp,
                 "eNB-LCID: ${enb}-${lcid}",
-                "PCI: ${cid.pci}  BW: $bwStr",
+                "PCI: ${cid.pci}  BW: $bw",
                 "TA: $ta",
                 bgColor
             )
@@ -396,22 +387,15 @@ class CellInfoView : View {
         val vo = if (cellInfo != null) {
             val cid = cellInfo.cellIdentity as CellIdentityNr
             val css = cellInfo.cellSignalStrength as CellSignalStrengthNr
-            val bw = cellInfo.bandwidth
-
-            val bwStr = if (bw != CellInfo.UNAVAILABLE) {
-                (bw / 1000).toString() + "MHz"
-            } else {
-                "-"
-            }
-            val ta = "-"
+            val bw = cellInfo.bandwidthStr
 
             val rsrp = if (css.csiRsrp != CellInfo.UNAVAILABLE) css.csiRsrp else null
             val bgColor = Utils.getColorByMnc(cellInfo.mccString, cellInfo.mncString)
             CellInfoViewVO(
                 rsrp,
                 "NCI: ${cid.nci}",
-                "PCI: ${cid.pci}  BW: $bwStr",
-                "TA: $ta",
+                "PCI: ${cid.pci}  BW: $bw",
+                "",
                 bgColor
             )
         } else {
@@ -419,7 +403,7 @@ class CellInfoView : View {
                 null,
                 "NCI: -",
                 "PCI: -  BW: -",
-                "TA: -",
+                "",
                 null
             )
         }

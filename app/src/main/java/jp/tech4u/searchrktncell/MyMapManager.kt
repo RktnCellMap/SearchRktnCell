@@ -21,6 +21,7 @@ class MyMapManager {
     private var locLine: Polyline? = null    // 基地局-現在地の線
     var myMapLL: LatLng? = null           // 掴んでいる基地局の位置
     var midNameMap = mutableMapOf<String, String>()
+    private var eciDefined = false  // eNB-LCIDの定義が1つ以上あるかどうか
 
     fun readMyMap(index: Int, mid: String, cacheFile: File, bReload: Boolean) {
         var kmlParser = kmlParserMap[index]
@@ -57,6 +58,10 @@ class MyMapManager {
         if (cacheFile.exists()) {
             kmlParser.parseMyMap(cacheFile)
             midNameMap[mid] = kmlParser.name
+
+            if (kmlParser.eciDefined) {
+                eciDefined = true
+            }
         }
     }
 
@@ -153,8 +158,13 @@ class MyMapManager {
         return false
     }
 
-    fun getName(cellid: Long): String {
-        val placemark = getPlacemark(cellid)
-        return placemark?.name ?: ""
+    fun getName(cellid: Long): String? {
+        return if ( !eciDefined) {
+            // そもそもマイマップにeNB-LCIDの定義がない
+            null
+        } else {
+            val placemark = getPlacemark(cellid)
+            placemark?.name ?: ""
+        }
     }
 }

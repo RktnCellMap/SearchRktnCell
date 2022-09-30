@@ -34,6 +34,8 @@ class KmlParser {
     var name: String = ""
     var description: String = ""
 
+    var eciDefined = false  // eNB-LCIDの定義が1つ以上あるかどうか
+
     data class Placemark(
         val name: String,
         val description: String,
@@ -296,6 +298,9 @@ class KmlParser {
             eciMutableList.addAll(EciUtil.getEciFromMemo(description).asIterable())
         }
         val eciList = eciMutableList.sorted().distinct()
+        if (!eciDefined && 0 < eciList.count()) {
+            eciDefined = true
+        }
         styleUrl = styleUrl.substring(1)   // 先頭の#を取る
         return Placemark(name, description, styleUrl, ll, eciList, EciUtil.getEnbLcid(eciList))
     }

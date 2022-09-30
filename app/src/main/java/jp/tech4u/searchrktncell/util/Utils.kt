@@ -1,5 +1,6 @@
 package jp.tech4u.searchrktncell.util
 
+import android.graphics.Color
 import android.telephony.CellInfo
 import android.text.TextUtils
 import android.util.Log
@@ -16,6 +17,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 object Utils {
@@ -43,6 +45,23 @@ object Utils {
     // 基本は arduinoMap() と同じ。outに値域チェックが入る。
     fun arduinoMapLimit(x: Int, in_min: Int, in_max: Int, out_min: Int, out_max: Int): Int {
         return max(out_min, min(out_max, arduinoMap(x, in_min, in_max, out_min, out_max)))
+    }
+
+    // 中心(lat,lng)、半径r[m]の正多角形を作る
+    fun createRegularPolygon(lat:Double, lng:Double, r:Double, nGon:Int):List<LatLng> {
+        var polygon = mutableListOf<LatLng>()
+
+        val divLng = cos(lat / 180 * Math.PI)
+        val rLat = r / 10000000 * 90
+        val rLng = r / 10000000 * 90 / divLng
+
+        for (i in 0 until nGon) {
+            val th = 2 * Math.PI / nGon * i
+            val dLat = cos(th) * rLat
+            val dLng = sin(th) * rLng
+            polygon.add(LatLng(lat + dLat, lng + dLng))
+        }
+        return polygon
     }
 
     fun saveFromInputStream(inputStream: InputStream, cacheFile: File) {
@@ -101,12 +120,34 @@ object Utils {
                         rows[9].toInt(),
                     )
                     logList.add(logVO)
+                }else if (rows.count() == 11) {
+                    val logVO = LogVO(
+                        rows[0].toInt(),
+                        rows[1].toDouble(),
+                        rows[2].toDouble(),
+                        rows[3],
+                        rows[4],
+                        rows[5].toInt(),
+                        rows[6].toLong(),
+                        rows[7].toInt(),
+                        rows[8].toInt(),
+                        rows[9].toInt(),
+                        rows[10].toInt(),
+                    )
+                    logList.add(logVO)
                 }
             } catch (e: java.lang.Exception) {
                 Log.w(TAG, e.toString())
                 // 握りつぶすｗ
             }
         }
+    }
+
+    fun calcColor(rsrp: Int, sector3: Int, bEqualBs: Boolean): Int {
+        val h = (sector3 % 3) * 120f // 色相。セクタ順に RGBになるようにしてます
+        val s = Utils.arduinoMapLimit(rsrp, -98, -50, 16, 255) / 255f // 彩度。RSRP比例
+        val v = if (bEqualBs) 1f else 0.6f  // 明度。別基地局は暗く。
+        return Color.HSVToColor(floatArrayOf(h, s, v))
     }
 
     fun getColorByMnc(mccString: String?, mncString: String?): Int {

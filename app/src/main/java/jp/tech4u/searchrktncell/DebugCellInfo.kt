@@ -22,11 +22,12 @@ class DebugCellInfo {
 
         private const val DEBUG_TRACE_LOG_START_INDEX = 2300
 
-        //const val DISABLE_RADIO_INFO = true
-        const val DISABLE_RADIO_INFO = false    // リリースはコレ
+        // 電測最良データ計算
+        const val DISABLE_RADIO_INFO = true
+        //const val DISABLE_RADIO_INFO = false    // リリースはコレ
 
-        const val INTERVAL_MS = 100L        // 描画間隔[ms]
-        private const val DISTANCE = 20f    // プ0ロット間隔[m]
+        const val INTERVAL_MS = 1000L        // 描画間隔[ms]
+        private const val DISTANCE = 20f    // プロット間隔[m]
     }
 
     private var debugCellIndex = DEBUG_TRACE_LOG_START_INDEX
