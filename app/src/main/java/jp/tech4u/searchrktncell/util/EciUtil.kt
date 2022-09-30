@@ -2,27 +2,27 @@ package jp.tech4u.searchrktncell.util
 
 object EciUtil {
 
-    private const val regEnb = "[0-9]{5,6}"
+    private const val regEnb = "[0-9]{5,7}"
     private const val regLcid = "[0-9]{1,2}"
 
     // 小平
-    private val regexEnb0c3 = Regex("($regEnb)-($regLcid),($regLcid),($regLcid)")
-    private val regexEnb0c2 = Regex("($regEnb)-($regLcid),($regLcid)")
-    private val regexEnb0c1 = Regex("($regEnb)-($regLcid)")
+    private val regexEnb0c3 = Regex("($regEnb)-($regLcid),($regLcid),($regLcid)\\b")
+    private val regexEnb0c2 = Regex("($regEnb)-($regLcid),($regLcid)\\b")
+    private val regexEnb0c1 = Regex("($regEnb)-($regLcid)\\b")
 
     // 上尾
-    private val regexEnb1c3 = Regex("($regEnb) ($regLcid)-($regLcid)-($regLcid)")
-    private val regexEnb1c2 = Regex("($regEnb) ($regLcid)-($regLcid)")
-    private val regexEnb1c1 = Regex("($regEnb) ($regLcid)")
+    private val regexEnb1c3 = Regex("($regEnb) ($regLcid)-($regLcid)-($regLcid)\\b")
+    private val regexEnb1c2 = Regex("($regEnb) ($regLcid)-($regLcid)\\b")
+    private val regexEnb1c1 = Regex("($regEnb) ($regLcid)\\b")
 
     // 奈良
     private val regexEnb2c2 = Regex("($regEnb)\\(CID:($regLcid)~($regLcid)\\)")
     private val regexEnb2c1 = Regex("($regEnb)\\(CID:($regLcid)\\)")
 
     // 足立
-    private val regexEnb3c3 = Regex("($regEnb)-($regLcid)-($regLcid)-($regLcid)")
-    private val regexEnb3c2 = Regex("($regEnb)-($regLcid)-($regLcid)")
-    private val regexEnb3c1 = Regex("($regEnb)-($regLcid)")
+    private val regexEnb3c3 = Regex("($regEnb)-($regLcid)-($regLcid)-($regLcid)\\b")
+    private val regexEnb3c2 = Regex("($regEnb)-($regLcid)-($regLcid)\\b")
+    //private val regexEnb3c1 = Regex("($regEnb)-($regLcid)\\b") // 小平と同じになる
 
     // 秋田
     //private val regexEnbNullpon = Regex("($regEnb) ($regLcid) ($regPci)")
@@ -86,8 +86,6 @@ object EciUtil {
         matchResult = regexEnb1c1.find(value)
         if (matchResult != null) return conv1EciArray(matchResult.destructured)
         matchResult = regexEnb2c1.find(value)
-        if (matchResult != null) return conv1EciArray(matchResult.destructured)
-        matchResult = regexEnb3c1.find(value)
         if (matchResult != null) return conv1EciArray(matchResult.destructured)
 
         // 見つからなかったので空を返す

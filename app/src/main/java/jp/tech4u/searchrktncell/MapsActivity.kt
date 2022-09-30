@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.*
+import android.graphics.drawable.Animatable
 import android.location.Location
 import android.os.*
 import android.telephony.*
@@ -132,6 +133,8 @@ class MapsActivity : AppCompatActivity(),
         btnGps.setOnClickListener { v ->
             enableLocation()
         }
+        //btnGps.setImageResource(R.drawable.gps_not_fixed)
+        (btnGps.drawable as Animatable).start()
 
         val br: BroadcastReceiver = PowerConnectionReceiver()
         val filter = IntentFilter()
@@ -798,6 +801,7 @@ class MapsActivity : AppCompatActivity(),
     {
         bMoveCurrentLocation = true
         btnGps.setImageResource(R.drawable.gps_not_fixed)
+        (btnGps.drawable as Animatable).start()
 
         fusedLocationClient.lastLocation
             .addOnSuccessListener {

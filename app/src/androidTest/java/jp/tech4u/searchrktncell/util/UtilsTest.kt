@@ -31,6 +31,20 @@ class UtilsTest {
         assertEquals("279785-11", EciUtil.getEnbLcid(eciAry.toList()))
         assertArrayEquals(longArrayOf(71624971), eciAry)
 
+        // 5桁
+        eciAry = EciUtil.getEciFromMemo("end:12345-1,2,3<br>")
+        assertEquals("12345-1,2,3", EciUtil.getEnbLcid(eciAry.toList()))
+        assertArrayEquals(longArrayOf(12345*256+1, 12345*256+2, 12345*256+3), eciAry)
+        // 7桁
+        eciAry = EciUtil.getEciFromMemo("end:1234567-1,2,3<br>")
+        assertEquals("1234567-1,2,3", EciUtil.getEnbLcid(eciAry.toList()))
+        assertArrayEquals(longArrayOf(1234567*256+1, 1234567*256+2, 1234567*256+3), eciAry)
+
+        // 千葉 車載基地局
+        eciAry = EciUtil.getEciFromMemo("2020.11.24 1015829-1,1015827-1\n車載基地局\n21.1 三里塚開局に伴い撤退？")
+        assertArrayEquals(longArrayOf(1015829*256+1), eciAry)
+        assertEquals("1015829-1", EciUtil.getEnbLcid(eciAry.toList()))
+
         // 上尾
         eciAry = EciUtil.getEciFromMemo("end:279785 1-2-3<br>")
         assertEquals("279785-1,2,3", EciUtil.getEnbLcid(eciAry.toList()))
