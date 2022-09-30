@@ -15,6 +15,7 @@
             app:stringR="TA: -"
     />
     <RelativeLayout
+            android:id="@+id/layoutMain"
             android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:theme="@style/ThemeOverlay.AppCompat.Dark">
@@ -72,9 +73,21 @@
                 android:background="@android:color/transparent"
                 android:elevation="5dp"
                 app:srcCompat="@drawable/northup"
-                android:onClick="onClickBtnCompass"
-                />
+                android:onClick="onClickBtnCompass" />
 
+        <ImageButton
+                android:id="@+id/btnHeadingUpMode"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginLeft="12dp"
+                android:layout_marginTop="96dp"
+                android:scaleX="1.33"
+                android:scaleY="1.33"
+                android:background="@android:color/transparent"
+                android:elevation="5dp"
+                app:srcCompat="@drawable/car"
+                android:visibility="invisible"
+                android:onClick="onClickBtnHeadingUpMode" />
 <!--中央-->
         <ImageView
                 android:id="@+id/imgLocationCenter"
@@ -190,6 +203,71 @@
                 android:layout_alignParentBottom="true"
                 app:scale_miles="false"
         />
+
+<!--中央 ローディングインジケーター -->
+        <LinearLayout
+                android:id="@+id/layoutReloadIndicator"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_centerVertical="true"
+                >
+            <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+            <ProgressBar
+                    android:id="@+id/pBarMyMap1"
+                    style="?android:attr/progressBarStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    />
+            <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+            <ProgressBar
+                    android:id="@+id/pBarMyMap2"
+                    style="?android:attr/progressBarStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    />
+            <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+            <ProgressBar
+                    android:id="@+id/pBarMyMap3"
+                    style="?android:attr/progressBarStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    />
+            <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+            <ProgressBar
+                    android:id="@+id/pBarMyMap4"
+                    style="?android:attr/progressBarStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    />
+            <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+            <ProgressBar
+                    android:id="@+id/pBarMyMap5"
+                    style="?android:attr/progressBarStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    />
+            <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+        </LinearLayout>
 
         <LinearLayout
                 android:id="@+id/layoutLayers"

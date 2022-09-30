@@ -2,7 +2,7 @@
 <resources>
     <color name="colorPrimary">#7F0046</color>
     <color name="colorPrimaryDark">#000033</color>
-    <color name="colorAccent">#03DAC5</color>
+    <color name="colorAccent">#03DAC5</color><!-- 03DAC5 -->
 
     <color name="colorDocomo">#660019</color>
     <color name="colorAu">#060635</color>

@@ -74,6 +74,14 @@
             android:summaryOff="ノースアップ"
             android:defaultValue="false"
     />
+    <DropDownPreference
+            app:key="headingUpMode"
+            app:title="ヘディングアップの方式"
+            app:entries="@array/headingUpModeEntries"
+            app:entryValues="@array/headingUpModeValues"
+            android:defaultValue="GPS"
+            app:useSimpleSummaryProvider="true"
+            />
     <SeekBarPreference
             app:key="headingUpSpeed"
             app:title="ヘディングアップ有効速度[km/h]"

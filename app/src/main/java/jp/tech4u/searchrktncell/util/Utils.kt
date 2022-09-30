@@ -299,6 +299,17 @@ object Utils {
         return mid
     }
 
+    // °単位の角度を0～360の範囲に収める
+    fun normalizeDegree(deg: Float): Float {
+        // 360で割ったあまりを求める
+        var deg = deg
+        deg %= 360f
+
+        // マイナスだったら360を足す
+        if (0f > deg) deg += 360f
+        return deg
+    }
+
     fun getPreferenceString(key: String, default: String?): String? {
         val context = MyApplication.getInstance()
         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)

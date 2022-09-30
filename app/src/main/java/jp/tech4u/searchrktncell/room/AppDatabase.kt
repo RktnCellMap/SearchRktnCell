@@ -11,7 +11,7 @@ abstract fun ~　にDaoクラス追加
 MyApplication.kt 内で Migration を検索して、見よう見まねでマイグレーションコードを書く
  */
 
-@Database(entities = [RadioInfoEntity::class, GoogleMyMapEntity::class], version = 2)
+@Database(entities = [RadioInfoEntity::class, GoogleMyMapEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun radioInfoDao(): RadioInfoDao
     abstract fun googleMyMapDao(): GoogleMyMapDao

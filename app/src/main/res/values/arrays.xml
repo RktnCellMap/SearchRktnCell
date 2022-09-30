@@ -26,6 +26,19 @@
     </string-array>
 
     <!-- 表示用 -->
+    <string-array name="headingUpModeEntries">
+        <item>GPS(車向け)</item>
+        <item>地磁気(徒歩向け)</item>
+        <!--<item>自動</item>-->
+    </string-array>
+    <!-- 内部KEY -->
+    <string-array name="headingUpModeValues">
+        <item>GPS</item>
+        <item>GEOMAGNETISM</item>
+        <!--<item>AUTO</item>-->
+    </string-array>
+
+    <!-- 表示用 -->
     <string-array name="mapTypeEntries">
         <item>デフォルト</item>
         <item>航空写真</item>

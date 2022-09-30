@@ -210,6 +210,7 @@ class MyMapManager {
         return placemark
     }
 
+    // 基地局への線を描画する
     // 線を描いたら true を返す
     fun drawLine(context : Context, latlng: LatLng, logVO: LogVO, mMap: GoogleMap): Boolean {
 
@@ -223,10 +224,12 @@ class MyMapManager {
         myMapLL = placemark?.ll
 
         if (myMapLL != null) {
+            val density = MyApplication.getInstance().resources.displayMetrics.density
             locLine = mMap.addPolyline(
                 PolylineOptions()
                     .add(latlng, myMapLL)
                     .color(ContextCompat.getColor(context, R.color.colorCurrToCellLine))
+                    .width(3.7f * density)
             )
             return true
         }

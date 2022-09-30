@@ -11,6 +11,7 @@ import android.graphics.Point
 import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.graphics.drawable.Animatable
+import android.hardware.*
 import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
@@ -39,10 +40,7 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.github.pengrad.mapscaleview.MapScaleView
 import com.google.android.gms.location.*
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.GoogleMap
-import com.google.android.gms.maps.OnMapReadyCallback
-import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.*
 import com.google.android.gms.maps.model.*
 import com.google.maps.android.SphericalUtil
 import jp.tech4u.searchrktncell.data.CellId
@@ -60,9 +58,6 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import kotlin.math.*
-import android.widget.Toast
-
-
 
 
 class MapsActivity : AppCompatActivity(),
@@ -74,6 +69,7 @@ class MapsActivity : AppCompatActivity(),
     GoogleMap.OnCameraMoveListener,
     GoogleMap.OnCameraIdleListener,
     //GoogleMap.OnMyLocationButtonClickListener,
+    SensorEventListener,
     SharedPreferences.OnSharedPreferenceChangeListener {
 
     companion object {
@@ -123,6 +119,7 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var btnCellFit: ImageButton
     private lateinit var btnLayers: ImageButton
     private lateinit var btnCompass: ImageButton
+    private lateinit var btnHeadingUpMode: ImageButton
     private lateinit var imgLocationCenter: ImageView
     private lateinit var txtCellInfoEci: TextView
     private lateinit var txtCellInfoTac: TextView
@@ -145,12 +142,32 @@ class MapsActivity : AppCompatActivity(),
         R.id.btnMyMap5
     )
 
+    private val pBarMyMapAry  = arrayOf(
+        R.id.pBarMyMap1,
+        R.id.pBarMyMap2,
+        R.id.pBarMyMap3,
+        R.id.pBarMyMap4,
+        R.id.pBarMyMap5,
+    )
+
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var powerConnectionReceiver: PowerConnectionReceiver
 
     private lateinit var locationCallback: LocationCallback
     private lateinit var cellInfoUpdateRequestCallback: CellInfoCallback
     private lateinit var phoneStateListener: PhoneStateListener
+
+    private lateinit var sensorManager: SensorManager
+    private val accelerometerReading = FloatArray(3)// 加速度
+    private val magnetometerReading = FloatArray(3) // 地磁気
+    private val accelerometerReadingLpf = FloatArray(3)// 加速度
+    private val magnetometerReadingLpf = FloatArray(3) // 地磁気
+    private val rotationMatrix = FloatArray(9)      // 加速度と地磁気の合成 または ROTATION_VECTORから変換
+    private val orientationAngles = FloatArray(3)   // 結果としてはコレ
+    private var magneticSensorExists = false
+    private var prefSensorRotateMillis = 0L
+    private var prefAccelerometerMillis = 0L
+    private var prefMagnetometerMillis = 0L
 
     // Register the permissions callback, which handles the user's response to the
     // system permissions dialog. Save the return value, an instance of
@@ -187,6 +204,9 @@ class MapsActivity : AppCompatActivity(),
 
     private var retryLocation: Boolean = false
 
+    // 磁北補正のアレ
+    private var geomagneticField: GeomagneticField? = null
+
     // 圏外／在圏
     private var isConnected: Boolean = false
 
@@ -215,6 +235,7 @@ class MapsActivity : AppCompatActivity(),
         btnCellFit = findViewById(R.id.btnCellFit)
         btnLayers = findViewById(R.id.btnLayers)
         btnCompass = findViewById(R.id.btnCompass)
+        btnHeadingUpMode = findViewById(R.id.btnHeadingUpMode)
         imgLocationCenter = findViewById(R.id.imgLocationCenter)
         txtCellInfoEci = findViewById(R.id.txtCellInfoEci)
         txtCellInfoTac = findViewById(R.id.txtCellInfoTac)
@@ -252,6 +273,7 @@ class MapsActivity : AppCompatActivity(),
 
         changeBtnCellFit()
         changeBtnCompass()
+        changeHeadingUpMode()
 
         // ダークテーマのマップスタイルを読み込む（反映はまだ）
         darkMapStyle = MapStyleOptions.loadRawResourceStyle(this, R.raw.dark_map)
@@ -281,6 +303,8 @@ class MapsActivity : AppCompatActivity(),
         }
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        magneticSensorExists = magneticSensorExistsCheck()
 
         // この辺でやっておかないとぬるぽ
         if (DebugCellInfo.DEBUG_CELL_INFO_ENABLE) {
@@ -293,6 +317,18 @@ class MapsActivity : AppCompatActivity(),
 
             cameraMoveDurationMs = (DebugCellInfo.INTERVAL_MS / 3).toInt()
         }
+    }
+
+    private fun magneticSensorExistsCheck(): Boolean {
+        val rv = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        if ( rv==null) {
+            val am = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+            val mf = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+            if (am == null || mf == null) {
+                return false
+            }
+        }
+        return true
     }
 
     fun onClickTxtLatLng(view: View) {
@@ -359,6 +395,8 @@ class MapsActivity : AppCompatActivity(),
             btnCellFit.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
             btnLayers.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
 
+            // btnCompass と btnHeadingUpMode の再描画のために呼ぶ。
+            changeBtnCompass()
 
         } catch (e: UninitializedPropertyAccessException) {
             // 設定でテーマが指定されていると、起動時にmMapがコレ。
@@ -390,8 +428,8 @@ class MapsActivity : AppCompatActivity(),
         //mMap.isMyLocationEnabled = true   // ←権限的にそう簡単にいかない・・・
         setMyLocationEnabled()  // 権限考慮版
 
-        val density = resources.displayMetrics.density
-        mMap.setPadding(0, (34 * density).toInt(), 0, (34 * density).toInt())
+        val paddingPx = (ZOOM_PADDING_DP * resources.displayMetrics.density).toInt()
+        mMap.setPadding(0, paddingPx, 0, paddingPx)
         mMap.setOnMapClickListener(this)
         mMap.setOnMapLongClickListener(this)
         mMap.setOnCameraMoveStartedListener(this)
@@ -497,6 +535,36 @@ class MapsActivity : AppCompatActivity(),
         super.onResume()
         Log.i(localClassName, "onResume")
         startLocationUpdates()
+
+        if (magneticSensorExists ) {
+            sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.also { rotationVector ->
+                sensorManager.registerListener(
+                    this,
+                    rotationVector,
+                    SensorManager.SENSOR_DELAY_UI,
+                    0
+                )
+            } ?: run {
+                // ROTATION_VECTOR が使えなかったら、MAGNETIC_FIELDとACCELEROMETERを使う
+                // （そんな端末が存在するかは未確認。）
+                sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also { magneticField ->
+                    sensorManager.registerListener(
+                        this,
+                        magneticField,
+                        SensorManager.SENSOR_DELAY_NORMAL,
+                        SensorManager.SENSOR_DELAY_UI
+                    )
+                }
+                sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
+                    sensorManager.registerListener(
+                        this,
+                        accelerometer,
+                        SensorManager.SENSOR_DELAY_NORMAL,
+                        SensorManager.SENSOR_DELAY_UI
+                    )
+                }
+            }
+        }
     }
 
     // ここが実行中
@@ -505,6 +573,7 @@ class MapsActivity : AppCompatActivity(),
         super.onPause()
         Log.i(localClassName, "onPause")
         stopLocationUpdates()
+        sensorManager.unregisterListener(this)
     }
 
     override fun onStop() {
@@ -702,6 +771,12 @@ class MapsActivity : AppCompatActivity(),
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latlng, 15f))
         }
         lastLocation = location
+        geomagneticField = GeomagneticField(
+            location.latitude.toFloat(),
+            location.longitude.toFloat(),
+            location.altitude.toFloat(),
+            System.currentTimeMillis()
+        )
 
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -1044,30 +1119,63 @@ class MapsActivity : AppCompatActivity(),
     // 地図の表示位置を現在地に移動する
     private fun moveTo(
         latlng: LatLng,
-        bearing: Float = 0f,
+        gpsBearing: Float = 0f,
         bearingAccuracyDegrees: Float = 0f,
         speed: Float = 0f
     ) {
-        val app = MyApplication.getInstance()
+        var bearing = gpsBearing
 
-        btnGps.setImageResource(R.drawable.gps_fixed)
+        if (btnGps.tag != "gps_fixed") {
+            btnGps.setImageResource(R.drawable.gps_fixed)
+            btnGps.tag = "gps_fixed"
+        }
+
         imgLocationCenter.visibility = View.INVISIBLE
         setMyLocation(true)
         setTxtLatLng(true, latlng)
 
-        // 現在地追従モードが基地局連動かどうか
-        val bMode = Utils.getPreferenceBoolean("locationMode", true)
-        // ヘディングアップすべきかどうか
+        // ヘディングアップ/ノースアップ
         val headingUp = Utils.getPreferenceBoolean("headingUp", false)
+        // 実際に回すべきかどうか(GPS精度が信用できなければ回転しない)
         val needHeadingUp = when {
             headingUp -> {
-                val headingUpSpeed = Utils.getPreferenceInt("headingUpSpeed", 5)
-                val headingUpBearingAccuracyDegrees =
-                    Utils.getPreferenceInt("headingUpBearingAccuracyDegrees", 5)
-                (bearingAccuracyDegrees != 0f && bearingAccuracyDegrees < headingUpBearingAccuracyDegrees || headingUpSpeed <= speed * 3.6f)
+                val headingUpMode = Utils.getPreferenceString("headingUpMode", "GPS")
+                if (headingUpMode == "GEOMAGNETISM") {
+                    bearing = geomagnetismBearing()
+                    true
+                } else {
+                    val headingUpSpeed = Utils.getPreferenceInt("headingUpSpeed", 5)
+                    val headingUpBearingAccuracyDegrees =
+                        Utils.getPreferenceInt("headingUpBearingAccuracyDegrees", 5)
+                    (bearingAccuracyDegrees != 0f && bearingAccuracyDegrees < headingUpBearingAccuracyDegrees || headingUpSpeed <= speed * 3.6f)
+                }
             }
             else -> false
         }
+        cameraMove(headingUp, needHeadingUp, latlng, bearing)
+    }
+
+    private fun geomagnetismBearing(): Float {
+        val d = this.windowManager.getDefaultDisplay()
+        val dRot = d.rotation * 90  // 画面回転 0,90,180,270度
+        val declination = geomagneticField?.declination ?: 0f
+        val magAngle =
+            if (-PI / 2 < orientationAngles[2] && orientationAngles[2] < PI / 2)
+                (orientationAngles[0] * 180 / PI).toFloat()
+            else (orientationAngles[0] * 180 / PI).toFloat() + 180
+        return magAngle - declination + dRot
+    }
+
+    private fun cameraMove(
+        headingUp: Boolean,
+        needHeadingUp: Boolean,
+        latlng: LatLng,
+        bearing: Float
+    ) {
+        val app = MyApplication.getInstance()
+
+        // 現在地追従モードが基地局連動かどうか
+        val bMode = Utils.getPreferenceBoolean("locationMode", true)
 
         var lls = mutableListOf<LatLng>()
         if (bMode && app.myMapManager.myMapLL != null) {
@@ -1101,11 +1209,7 @@ class MapsActivity : AppCompatActivity(),
     }
 
     private fun cameraMoveLatLng(ll: LatLng) {
-        mMap.animateCamera(
-            CameraUpdateFactory.newLatLng(ll),
-            cameraMoveDurationMs,
-            null
-        )
+        myAnimateCamera(CameraUpdateFactory.newLatLng(ll))
     }
 
     private fun cameraMoveMultiPointNu(ll: LatLng, lls: List<LatLng>) {
@@ -1114,11 +1218,15 @@ class MapsActivity : AppCompatActivity(),
             llArea.include(it)
         }
         val paddingPx = (ZOOM_PADDING_DP * resources.displayMetrics.density).toInt()
-        mMap.animateCamera(
-            CameraUpdateFactory.newLatLngBounds(llArea.build(), paddingPx),
-            cameraMoveDurationMs,
-            null
-        )
+        myAnimateCamera(CameraUpdateFactory.newLatLngBounds(llArea.build(), paddingPx))
+    }
+
+    private fun myAnimateCamera(cameraUpdate: CameraUpdate) {
+        if (cameraMoveDurationMs == 0) {
+            mMap.moveCamera(cameraUpdate)
+        } else {
+            mMap.animateCamera(cameraUpdate, cameraMoveDurationMs, null)
+        }
     }
 
     private fun addLlToPts(pts: MutableList<Float>, ll: LatLng) {
@@ -1128,6 +1236,7 @@ class MapsActivity : AppCompatActivity(),
     }
 
     /*
+    // 拡縮計算位置可視化用（デバッグ用）
     private var markerT:Marker?=null
     private var markerR:Marker?=null
     private var markerB:Marker?=null
@@ -1142,6 +1251,7 @@ class MapsActivity : AppCompatActivity(),
         val maxDistance: Double =
             Utils.getPreferenceString("maxDistance", "2000")?.toDouble() ?: 2000.0
 
+        // 画面上の座標の配列。偶数:x 奇数:y
         val pts = mutableListOf<Float>()
         addLlToPts(pts, ll)
 
@@ -1196,13 +1306,19 @@ class MapsActivity : AppCompatActivity(),
         }
 
         val paddingPx = (ZOOM_PADDING_DP * resources.displayMetrics.density).toInt()
-        val w = r - l + paddingPx * 2
-        val h = b - t + paddingPx * 4
-        val scaleW = w / mapW
-        val scaleH = h / mapH
+        val scaleW = (r - l) / (mapW - paddingPx * 2)
+        val scaleH = (b - t) / (mapH - paddingPx * 4)
         val scale = max(scaleW, scaleH)
         val zoom = mMap.cameraPosition.zoom - log2(scale)
-        val centerP = Point(((l + r) / 2).toInt(), ((t + b) / 2).toInt())
+
+        // 回転したスクリーン座標での中央
+        val centerPointRot = arrayOf(((l + r) / 2), ((t + b) / 2)).toFloatArray()
+        // 回転してないスクリーン座標に戻す
+        val matrixRev = Matrix()
+        matrixRev.setRotate(-dTheta, (mapW / 2).toFloat(), (mapH / 2).toFloat())
+        matrixRev.mapPoints(centerPointRot)
+        val centerP = Point(centerPointRot[0].toInt(),centerPointRot[1].toInt())
+        // 緯度経度に変換
         val centerLL = mMap.projection.fromScreenLocation(centerP)
         //Log.i("CELLINFO", "centerLL:$centerLL, zoom:$zoom, bearing:$bearing, scale:$scale")
         cameraMoveParam(centerLL, zoom, bearing)
@@ -1210,11 +1326,7 @@ class MapsActivity : AppCompatActivity(),
 
     private fun cameraMoveParam(ll: LatLng, zoom: Float, bearing: Float) {
         val cameraPos = CameraPosition.Builder().target(ll).zoom(zoom).bearing(bearing).build()
-        mMap.animateCamera(
-            CameraUpdateFactory.newCameraPosition(cameraPos),
-            cameraMoveDurationMs,
-            null
-        )
+        myAnimateCamera(CameraUpdateFactory.newCameraPosition(cameraPos))
     }
 
     private fun readLogAndPutMarker() {
@@ -1345,16 +1457,26 @@ class MapsActivity : AppCompatActivity(),
                     reloadMyMap(index, key, bReload)
                 }
             } else {
+                val pBarMyMap: ProgressBar = findViewById(pBarMyMapAry[index])
+                pBarMyMap.visibility = View.INVISIBLE
                 app.myMapManager.clearMyMap(index)
             }
         }
     }
 
+    private suspend fun setVisibilityAsync(view:View, visibility:Int) {
+        withContext(Dispatchers.Main) {
+            view.visibility = visibility
+        }
+    }
+
     private suspend fun reloadMyMap(index: Int, key: String, bReload: Boolean) {
+        val pBarMyMap: ProgressBar = findViewById(pBarMyMapAry[index])
         try {
             // doInBackgroundメソッドと同等の処理
             val app = MyApplication.getInstance()
             val result = try {
+                setVisibilityAsync(pBarMyMap, View.VISIBLE)
                 app.myMapManager.readMyMap(index, key, bReload)
                 "OK"
             } catch (e: MyException) {
@@ -1382,10 +1504,12 @@ class MapsActivity : AppCompatActivity(),
                     Toast.makeText(app.applicationContext, result, Toast.LENGTH_SHORT).show()
                 }
                 Log.i(localClassName, "reloadMyMap $index result $result")
+                pBarMyMap.visibility = View.INVISIBLE
             }
         } catch (e: Exception) {
             // onCancelledメソッドと同等の処理
             Log.e(localClassName, "reloadMyMap失敗", e)
+            setVisibilityAsync(pBarMyMap, View.INVISIBLE)
         }
     }
 
@@ -1467,7 +1591,11 @@ class MapsActivity : AppCompatActivity(),
         Log.v(localClassName, "onCameraMoveStarted:$reason")
         if (reason != GoogleMap.OnCameraMoveStartedListener.REASON_DEVELOPER_ANIMATION) {
             bMoveCurrentLocation = false
-            btnGps.setImageResource(R.drawable.gps_off)
+            if (btnGps.tag != "gps_off") {
+                btnGps.setImageResource(R.drawable.gps_off)
+                btnGps.tag = "gps_off"
+            }
+
             imgLocationCenter.visibility = View.VISIBLE
             setMyLocation(false)
         }
@@ -1511,6 +1639,7 @@ class MapsActivity : AppCompatActivity(),
     private fun enableLocation() {
         bMoveCurrentLocation = true
         btnGps.setImageResource(R.drawable.gps_not_fixed)
+        btnGps.tag = "gps_not_fixed"
         (btnGps.drawable as Animatable).start()
 
         Log.d(localClassName, "enableLocation")
@@ -1557,6 +1686,7 @@ class MapsActivity : AppCompatActivity(),
                 "locationTimer", "locationTimerSecs" -> resetLocationTimer()
                 "locationMode" -> changeBtnCellFit()
                 "headingUp" -> changeBtnCompass()
+                "headingUpMode" -> changeHeadingUpMode()
                 "mapType" -> changeMapType()
                 "mapLayerTraffic" -> changeMapLayer()
                 "plotPartner", "plotMyMapCell", "excludeTac" -> {
@@ -1680,11 +1810,7 @@ class MapsActivity : AppCompatActivity(),
                 val ll = mMap.cameraPosition.target
                 val zoom = mMap.cameraPosition.zoom
                 val cameraPos = CameraPosition.Builder().target(ll).zoom(zoom).bearing(0f).build()
-                mMap.animateCamera(
-                    CameraUpdateFactory.newCameraPosition(cameraPos),
-                    cameraMoveDurationMs,
-                    null
-                )
+                myAnimateCamera(CameraUpdateFactory.newCameraPosition(cameraPos))
             }
         }
     }
@@ -1693,6 +1819,15 @@ class MapsActivity : AppCompatActivity(),
         val headingUp2 = headingUp ?: Utils.getPreferenceBoolean("headingUp", false)
         val icon = if (headingUp2) R.drawable.compass else R.drawable.northup
         btnCompass.setImageResource(icon)
+
+        if (headingUp2) {
+            btnHeadingUpMode.visibility = View.VISIBLE
+            // cameraMoveDurationMs の反映目的で呼んでます。（アイコン選択は必要ないと思うけど）
+            changeHeadingUpMode()
+        } else {
+            btnHeadingUpMode.visibility = View.INVISIBLE
+            cameraMoveDurationMs = 300
+        }
     }
 
     fun onClickMapStandard(view: android.view.View) {
@@ -1785,5 +1920,111 @@ class MapsActivity : AppCompatActivity(),
 
     fun onClickDummy(view: android.view.View) {
         // 裏を押さないようにするためのダミー
+    }
+
+    fun onClickBtnHeadingUpMode(view: android.view.View) {
+        if ( !magneticSensorExists) {
+            myToastShow("地磁気センサー非搭載機種のため切り替えできません",Toast.LENGTH_SHORT)
+            return
+        }
+
+
+        val headingUpMode = Utils.getPreferenceString("headingUpMode", "GPS")
+        val headingUpModeNow = if (headingUpMode == "GEOMAGNETISM") "GPS" else "GEOMAGNETISM"
+
+        if (headingUpModeNow == "GEOMAGNETISM") {
+            myToastShow("ヘディングアップ 地磁気\n（徒歩向け）", Toast.LENGTH_SHORT)
+        } else /*if (headingUpMode2 == "GPS") */ {
+            myToastShow("ヘディングアップ  GPS\n（車向け）", Toast.LENGTH_SHORT)
+        }
+        Utils.setPreferenceString("headingUpMode", headingUpModeNow)
+        changeHeadingUpMode(headingUpModeNow)
+    }
+
+    private fun changeHeadingUpMode(headingUpMode: String? = null) {
+        val headingUpModeNow = headingUpMode ?: Utils.getPreferenceString("headingUpMode", "GPS")
+        var icon: Int
+        if (headingUpModeNow == "GEOMAGNETISM") {
+            cameraMoveDurationMs = 50 //0
+            icon = R.drawable.walk
+        } else /*if (headingUpMode2 == "GPS") */ {
+            cameraMoveDurationMs = 300
+            icon = R.drawable.car
+        }
+        btnHeadingUpMode.setImageResource(icon)
+    }
+
+    override fun onSensorChanged(event: SensorEvent) {
+        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+            System.arraycopy(event.values, 0, accelerometerReading, 0, accelerometerReading.size)
+            //Log.d("onSensorChanged", "A")
+            val mills = System.currentTimeMillis()
+            val dt = mills - prefAccelerometerMillis
+            prefAccelerometerMillis = mills
+            // （dtの分母が大きいほど緩やか。）
+            val alpha = max(1 - dt / 100f, 0f)
+            // ローパスフィルタ(Matrixの各値をそれぞれLPF)
+            for (i in 0 until magnetometerReading.size) {
+                accelerometerReadingLpf[i] =
+                    alpha * accelerometerReadingLpf[i] + (1 - alpha) * accelerometerReading[i]
+            }
+            updateFromAccelerometerAndMagneticField()
+        } else if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
+            System.arraycopy(event.values, 0, magnetometerReading, 0, magnetometerReading.size)
+            //Log.d("onSensorChanged", "M")
+            val mills = System.currentTimeMillis()
+            val dt = mills - prefMagnetometerMillis
+            prefMagnetometerMillis = mills
+            val alpha = max(1 - dt / 10f, 0f)
+            // ローパスフィルタ(Matrixの各値をそれぞれLPF)
+            for (i in 0 until magnetometerReading.size) {
+                magnetometerReadingLpf[i] =
+                    alpha * magnetometerReadingLpf[i] + (1 - alpha) * magnetometerReading[i]
+            }
+            //updateFromAccelerometerAndMagneticField()
+        } else if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
+            SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+            updateFromRotationMatrix()
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
+    }
+
+    private fun updateFromAccelerometerAndMagneticField() {
+        SensorManager.getRotationMatrix(
+            rotationMatrix,
+            null,
+            accelerometerReadingLpf,
+            magnetometerReadingLpf
+        )
+
+        updateFromRotationMatrix()
+    }
+
+    private fun updateFromRotationMatrix() {
+        val mills = System.currentTimeMillis()
+        SensorManager.getOrientation(rotationMatrix, orientationAngles)
+        if (bMoveCurrentLocation && lastLocation != null) {
+            // 現在地連動モード かつ 位置特定済み
+            if (100 < mills - prefSensorRotateMillis) {
+                prefSensorRotateMillis = mills
+                // 前回の回転から一定時間たっている
+                val headingUp = Utils.getPreferenceBoolean("headingUp", false)
+                val headingUpMode = Utils.getPreferenceString("headingUpMode", "GPS")
+                if (headingUp && headingUpMode == "GEOMAGNETISM") {
+                    // ヘディングアップ かつ 地磁気によるヘディングアップ
+
+                    // 地図を回転する
+                    val latlng = LatLng(lastLocation!!.latitude, lastLocation!!.longitude)
+                    val geoBearing = geomagnetismBearing()
+                    val mapBearing = mMap.cameraPosition.bearing
+                    val diffDeg = Utils.normalizeDegree(geoBearing - mapBearing)
+                    if (1 < diffDeg && diffDeg < 359) {
+                        cameraMove(true, true, latlng, geoBearing)
+                    }
+                }
+            }
+        }
     }
 }
