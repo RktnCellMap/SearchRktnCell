@@ -9,7 +9,7 @@
 
     <!-- Setting Title -->
     <string name="title_activity_settings">設定</string>
-    <string name="refreshInterval_title">更新間隔</string>
+    <string name="refreshInterval_title">現在地更新間隔</string>
     <string name="myMapUrl_title">GoogleマイマップURL</string>
     <string name="version_title">バージョン</string>
 </resources>

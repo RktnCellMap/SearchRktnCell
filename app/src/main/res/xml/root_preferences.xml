@@ -2,22 +2,60 @@
         xmlns:app="http://schemas.android.com/apk/res-auto"
         xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <DropDownPreference
+            app:key="keepScreenOn"
+            app:title="画面ON"
+            app:entries="@array/keepScreenOnEntries"
+            app:entryValues="@array/keepScreenOnEntryValues"
+            android:defaultValue="POWER"
+            app:useSimpleSummaryProvider="true"
+    />
+
+    <SwitchPreference
+            app:key="locationMode"
+            app:title="現在地追従モード"
+            android:summaryOn="基地局が見えるよう拡縮する"
+            android:summaryOff="現在地のみ"
+            android:defaultValue="true"
+    />
+
+    <SwitchPreference
+            app:key="locationTimer"
+            app:title="現在地連動タイマー"
+            android:summaryOn="一定時間後、現在地連動に戻す"
+            android:summaryOff="現在地連動に戻さない"
+            android:defaultValue="true"
+    />
+    <SeekBarPreference
+            app:key="locationTimerSecs"
+            app:title="現在地連動に戻す秒数"
+            android:dependency="locationTimer"
+            android:max="60"
+            app:min="5"
+            android:defaultValue="60"
+            app:showSeekBarValue="true"
+    />
+
+
     <SeekBarPreference
             app:key="refreshInterval"
+            app:title="@string/refreshInterval_title"
             android:max="10"
             app:min="1"
             android:defaultValue="5"
             app:showSeekBarValue="true"
-            app:title="@string/refreshInterval_title" />
+    />
 
     <EditTextPreference
             app:key="myMapUrl"
             app:title="@string/myMapUrl_title"
-            app:useSimpleSummaryProvider="true"/>
+            app:useSimpleSummaryProvider="true"
+    />
 
     <Preference
             app:key="version"
             app:title="@string/version_title"
-            app:summary="x.x.x"/>
+            app:summary="x.x.x"
+    />
 
 </PreferenceScreen>

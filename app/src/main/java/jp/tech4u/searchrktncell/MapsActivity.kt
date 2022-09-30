@@ -1,8 +1,7 @@
 package jp.tech4u.searchrktncell
 
 import android.Manifest
-import android.content.Intent
-import android.content.SharedPreferences
+import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.location.Location
@@ -30,7 +29,6 @@ import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.*
 
-
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
     GoogleMap.OnCameraMoveStartedListener,
@@ -39,13 +37,12 @@ class MapsActivity : AppCompatActivity(),
 
     companion object {
         // デバッグ用ここから
-        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20201219_higasifushimi.csv"
-        //private const val DEBUG_LOAD_LOG_FILENAME="log_20201219_koganeikouen.csv"
-        private const val DEBUG_LOAD_LOG_FILENAME=""    // リリースはコレ
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210105_higashiyamato_yamada.csv"
+        private const val DEBUG_LOAD_LOG_FILENAME = ""    // リリースはコレ
 
         //private const val DEBUG_TRACE_LOG = true    // CellInfoViewクリックでログをトレース
         private const val DEBUG_TRACE_LOG = false    // リリースはコレ
-        private const val DEBUG_TRACE_LOG_START_INDEX = 1623 // ↑がfalseなら関係ない
+        private const val DEBUG_TRACE_LOG_START_INDEX = 4195 // ↑がfalseなら関係ない
         // デバッグ用ここまで
 
         private const val PERMISSION_REQUEST_CODE = 44011   // なんでもいい
@@ -62,7 +59,10 @@ class MapsActivity : AppCompatActivity(),
             return instance
         }
     }
+
     private var debugCellIndex = if (DEBUG_TRACE_LOG) DEBUG_TRACE_LOG_START_INDEX else -1
+
+    private val handler = Handler(Looper.getMainLooper())
 
     private lateinit var cellInfoView: CellInfoView
 
@@ -81,8 +81,8 @@ class MapsActivity : AppCompatActivity(),
         super.onCreate(savedInstanceState)
         instance = this
         setContentView(R.layout.activity_maps)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        setScreenOn()
 
         cellInfoView = findViewById(R.id.cellInfoView)
 
@@ -119,6 +119,13 @@ class MapsActivity : AppCompatActivity(),
             }
         }
 
+        val br: BroadcastReceiver = PowerConnectionReceiver()
+        val filter = IntentFilter()
+        //filter.addAction(Intent.ACTION_POWER_CONNECTED)
+        //filter.addAction(Intent.ACTION_POWER_DISCONNECTED)
+        filter.addAction(Intent.ACTION_BATTERY_CHANGED)
+        registerReceiver(br, filter)
+
         requestPermission()
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
@@ -154,12 +161,17 @@ class MapsActivity : AppCompatActivity(),
     }
 
 
-
     //readMyMap
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         println("onCreateOptionsMenu")
         val inflater = menuInflater
         inflater.inflate(R.menu.main, menu)
+        return true
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        val mid = getMyMapMid()
+        menu.findItem(R.id.reloadMyMap).isEnabled = mid != ""
         return true
     }
 
@@ -175,9 +187,8 @@ class MapsActivity : AppCompatActivity(),
                 val mid = getMyMapMid()
                 if (mid != "") {
                     DownloadMyMapTask().execute(mid as Object, true as Object)
-                }
-                else {
-                    // TODO 未設定の場合の TOAST
+                } else {
+                    // 未設定の場合。メニューを非活性にしているので、ここには来ないと思う。
                 }
             }
             R.id.settings -> {
@@ -296,21 +307,14 @@ class MapsActivity : AppCompatActivity(),
                 bgColor
             )
             drawCellInfoView(cvo)
+            recordManager.plotAndLog(lvo)
             cvo.rsrp
         }
 
         // 圏外の場合は、上のビューに圏外表示
         if (cellid == 0) drawCellInfoView(null, 0)
 
-
-        // デバッグ用仮表示
-        /*
-        val bgColor = getColorByMnc(440, 11)
-        val vo = CellInfoViewVO(-88, "eNB-LCID: 279785-12", "PCI: 999  BW: 99MHz", "TA: -", bgColor)
-        drawCellInfoView(vo)
-        */
-
-        if ( myMapManager==null ) return
+        if (myMapManager == null) return
         //// 基地局表示
         // マイマップにある場合はソレ
         val bExist = myMapManager!!.drawLine(latlng, cellid, mMap)
@@ -414,24 +418,29 @@ class MapsActivity : AppCompatActivity(),
             440 -> {
                 when (mnc) {
                     11 -> ContextCompat.getColor(context, R.color.colorRakuten)
-                    50, 51, 52, 53 -> ContextCompat.getColor(context,R.color.colorAu)
-                    10 -> ContextCompat.getColor(context,R.color.colorDocomo)
-                    else -> ContextCompat.getColor(context,R.color.colorSoftbank)
+                    50, 51, 52, 53 -> ContextCompat.getColor(context, R.color.colorAu)
+                    10 -> ContextCompat.getColor(context, R.color.colorDocomo)
+                    else -> ContextCompat.getColor(context, R.color.colorSoftbank)
                 }
             }
             441 -> {
                 when (mnc) {
-                    0 -> ContextCompat.getColor(context,R.color.colorSoftbank)
-                    10 -> ContextCompat.getColor(context,R.color.colorAu)
-                    else -> ContextCompat.getColor(context,R.color.colorForeign)
+                    0 -> ContextCompat.getColor(context, R.color.colorSoftbank)
+                    10 -> ContextCompat.getColor(context, R.color.colorAu)
+                    else -> ContextCompat.getColor(context, R.color.colorForeign)
                 }
             }
-            else -> ContextCompat.getColor(context,R.color.colorForeign)
+            else -> ContextCompat.getColor(context, R.color.colorForeign)
         }
     }
 
+    // 地図の表示位置を現在地に移動する
     private fun moveTo(latlng: LatLng) {
-        if (myMapManager!=null && myMapManager!!.myMapLL!=null){
+        // 現在地追従モードが基地局連動かどうか
+        val bMode = getPreferenceBoolean("locationMode", true)
+
+        if (bMode && myMapManager != null && myMapManager!!.myMapLL != null) {
+            // 基地局連動モードで、マイマップから基地局発見の場合
             val llBuilder = LatLngBounds.Builder()
             llBuilder.include(myMapManager!!.myMapLL!!)
             llBuilder.include(latlng)
@@ -440,8 +449,8 @@ class MapsActivity : AppCompatActivity(),
             llBuilder.include(LatLng(latlng.latitude + 0.005, latlng.longitude + 0.005))
 
             mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(llBuilder.build(), 100), 300, null)
-        }
-        else if (mlsManager.foundMlsBounds != null) {
+        } else if (bMode && mlsManager.foundMlsBounds != null) {
+            // 基地局連動モードで、（マイマップから基地局発見できず、）MLSから基地局発見の場合
             val llBuilder = LatLngBounds.Builder()
             llBuilder.include(mlsManager.foundMlsBounds!!.northeast)
             llBuilder.include(mlsManager.foundMlsBounds!!.southwest)
@@ -605,11 +614,10 @@ class MapsActivity : AppCompatActivity(),
     }
 
     // 設定からマイマップのMIDを取得する
-    private fun getMyMapMid():String {
+    private fun getMyMapMid(): String {
         var mid = ""
         try {
-            val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-            val myMapUrl = sharedPreferences.getString("myMapUrl", null)
+            val myMapUrl = getPreferenceString("myMapUrl", null)
             if (myMapUrl != null) {
                 val myMapUrlTrimmed = myMapUrl.trim()
                 if (myMapUrlTrimmed.length == 33) {
@@ -628,9 +636,9 @@ class MapsActivity : AppCompatActivity(),
                     }
                 }
             }
-        }
-        catch(e:Exception){
-            // TODO マイマップURI解析失敗時のエラー表示
+        } catch (e: Exception) {
+            // マイマップURI解析失敗
+            // ユーザーへの通知は、、、まあいいや・・・
         }
         return mid
     }
@@ -651,8 +659,7 @@ class MapsActivity : AppCompatActivity(),
     private fun createLocationRequest(): LocationRequest? {
         return LocationRequest.create()?.apply {
 
-            val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-            val intervalSecs = sharedPreferences.getInt("refreshInterval", 5)
+            val intervalSecs = getPreferenceInt("refreshInterval", 5)
 
             interval = intervalSecs * 1000L
             //fastestInterval = 1000
@@ -664,6 +671,16 @@ class MapsActivity : AppCompatActivity(),
         println("onCameraMoveStarted")
         if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
             bMoveCurrentLocation = false
+        }
+        resetLocationTimer()
+    }
+
+    private fun resetLocationTimer() {
+        handler.removeCallbacksAndMessages(null)    // もしCallBackがあれば全削除
+        if (getPreferenceBoolean("locationTimer", false)) {
+            // 現在地連動タイマースタート
+            val secs = getPreferenceInt("locationTimerSecs", 60)
+            handler.postDelayed({ onMyLocationButtonClick() }, secs * 1000L)
         }
     }
 
@@ -679,6 +696,8 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
 
+        // 現在地連動タイマーがONなら解除・・・は、いらないかな。（無駄に呼ばれても副作用はなさそう）
+
         return false
     }
 
@@ -686,20 +705,24 @@ class MapsActivity : AppCompatActivity(),
         if (sharedPreferences != null) {
             when (key) {
                 "myMapUrl" -> {
-                    //Handler(Looper.getMainLooper()).post(Runnable {
                     val mid = getMyMapMid()
                     if (mid != "") {
                         DownloadMyMapTask().execute(mid as Object, true as Object)
                     } else {
-                        // TODO 未設定の場合の TOAST
+                        Toast.makeText(applicationContext, "マイマップURL未設定（またはエラー）", Toast.LENGTH_LONG).show()
                     }
-                    //})
                 }
                 "refreshInterval" -> {
                     println("onSharedPreferenceChanged(" + sharedPreferences.getInt(key, -1) + ",$key)")
                     // 一旦止めて再度動かすことで、更新間隔を反映する
                     stopLocationUpdates()
                     startLocationUpdates()
+                }
+                "keepScreenOn" -> {
+                    setScreenOn()
+                }
+                "locationTimer", "locationTimerSecs"-> {
+                    resetLocationTimer()
                 }
                 else -> {
                     println("onSharedPreferenceChanged($key)")
@@ -718,15 +741,16 @@ class MapsActivity : AppCompatActivity(),
                 mlsManager.readMls(MLS_JSON_URL, cacheFile, bReload)
                 "OK"
             } catch (e: IOException) {
-                "接続エラー"//resources.getString(R.string.connection_error)
-            } catch (e: XmlPullParserException) {
-                "XMLエラー"//resources.getString(R.string.xml_error)
+                "MLSダウンロード失敗"//resources.getString(R.string.connection_error)
+            } catch (e: Exception) {
+                "MLS読み込み失敗"//resources.getString(R.string.xml_error)
             }
         }
 
         override fun onPostExecute(result: String) {
-            // 特にやることは無い、かな？
-
+            if (result != "OK") {
+                Toast.makeText(applicationContext, result, Toast.LENGTH_SHORT).show()
+            }
             println(result)
         }
     }
@@ -741,21 +765,85 @@ class MapsActivity : AppCompatActivity(),
                 myMapManager!!.readMyMap(key, cacheFile, bReload)
                 "OK"
             } catch (e: IOException) {
-                "接続エラー"//resources.getString(R.string.connection_error)
+                "マイマップダウンロード失敗"//resources.getString(R.string.connection_error)
             } catch (e: XmlPullParserException) {
-                "XMLエラー"//resources.getString(R.string.xml_error)
+                "マイマップ解析失敗"//resources.getString(R.string.xml_error)
+            } catch (e: Exception) {
+                "マイマップ読み込み失敗"//resources.getString(R.string.xml_error)
             }
         }
 
         override fun onPostExecute(result: String) {
 
-            if ( result == "OK") {
+            if (result == "OK") {
                 myMapManager?.plotPlacemark()
+            } else {
+                Toast.makeText(applicationContext, result, Toast.LENGTH_SHORT).show()
             }
-
             println(result)
         }
     }
 
+    // 電源状態の変更ハンドラ
+    inner class PowerConnectionReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            // 設定読み込み
+            val keepScreenOn = getPreferenceString("keepScreenOn", "OFF")
 
+            if (keepScreenOn == "POWER") {
+                // 設定が電源連動だった場合のみ、画面OK設定へ反映
+                setScreenOn(intent)
+            }
+        }
+    }
+
+    private fun getPreferenceString(key: String, default: String?): String? {
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+        return sharedPreferences.getString(key, default)
+    }
+
+    private fun getPreferenceInt(key: String, default: Int): Int {
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+        return sharedPreferences.getInt(key, default)
+    }
+
+    private fun getPreferenceBoolean(key: String, default: Boolean): Boolean {
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+        return sharedPreferences.getBoolean(key, default)
+    }
+
+    // 常時画面ONの設定をする（設定とAC電源の状態を見て適切に設定する）
+    private fun setScreenOn() {
+        val keepScreenOn = getPreferenceString("keepScreenOn", "OFF")
+        when (keepScreenOn) {
+            "ON" -> {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+            "OFF" -> {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+            "POWER" -> {
+                val batteryStatus: Intent? = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { iFilter ->
+                    applicationContext.registerReceiver(null, iFilter)
+                }
+                setScreenOn(batteryStatus)
+            }
+        }
+    }
+
+    // 常時画面ONの設定をする（AC電源の状態を見て適切に設定する）
+    private fun setScreenOn(batteryStatus: Intent?) {
+        if (batteryStatus == null) return
+
+        when (batteryStatus?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)) {
+            0 -> {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+            else -> {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+    }
 }
+
+

@@ -16,7 +16,14 @@ class KmlParser {
     var name: String = ""
     var description: String = ""
 
-    data class Placemark(val name: String, val description: String, val styleUrl: String, val ll: LatLng)
+    data class Placemark(
+        val name: String,
+        val description: String,
+        val styleUrl: String,
+        val ll: LatLng,
+        var snippet: String
+    )
+
     data class KmlStyle(
         var styleUrl: String?,
         var key: String?,
@@ -206,7 +213,7 @@ class KmlParser {
         }
         parser.require(XmlPullParser.END_TAG, ns, "Placemark")
         styleUrl = styleUrl.substring(1)   // 先頭の#を取る
-        return Placemark(name, description, styleUrl, ll)
+        return Placemark(name, description, styleUrl, ll, "")
     }
 
     @Throws(IOException::class, XmlPullParserException::class)

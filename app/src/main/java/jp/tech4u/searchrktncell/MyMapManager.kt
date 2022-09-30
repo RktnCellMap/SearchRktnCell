@@ -1,7 +1,11 @@
 package jp.tech4u.searchrktncell
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.*
@@ -16,6 +20,7 @@ import java.nio.file.Paths
 class MyMapManager() {
     private lateinit var mMap: GoogleMap
     private var kmlParser = KmlParser()
+
     private var markerList = mutableListOf<Marker>()
     private val eciMap = mutableMapOf<Int, KmlParser.Placemark>()
 
@@ -69,7 +74,7 @@ class MyMapManager() {
     }
 
     // kmlParser.placemarks から eciMap を作る
-    private fun createEciMap(name:String) {
+    private fun createEciMap(name: String) {
         if (kmlParser.placemarks == null) return
 
         val getEciFn = if (name.contains("1Cndr7XT1tk7sB-_mZlJVGoujk1RdgW79"))
@@ -78,15 +83,23 @@ class MyMapManager() {
             EciUtil::getEciFromMemo // 通常
 
         for (placemark in kmlParser.placemarks) {
-            val eciArrayN = getEciFn(placemark.name)
-            for (i in eciArrayN) {
-                eciMap[i] = placemark
-                //println(i)
+            val eciPairN = getEciFn(placemark.name)
+            val eciArrayN = eciPairN.second
+            if (eciArrayN.isNotEmpty()) {
+                placemark.snippet = eciPairN.first
+                for (eci in eciArrayN) {
+                    eciMap[eci] = placemark
+                    //println(eci)
+                }
             }
-            val eciArrayD = getEciFn(placemark.description)
-            for (i in eciArrayD) {
-                eciMap[i] = placemark
-                //println(i)
+            val eciPairD = getEciFn(placemark.description)
+            val eciArrayD = eciPairD.second
+            if (eciArrayD.isNotEmpty()) {
+                placemark.snippet = eciPairD.first
+                for (eci in eciArrayD) {
+                    eciMap[eci] = placemark
+                    //println(eci)
+                }
             }
         }
     }
@@ -110,11 +123,11 @@ class MyMapManager() {
     private fun plotImpl(placemark: KmlParser.Placemark) {
         if (placemark.ll != null) {
             val kmlStyle = kmlParser.kmlStyleMap[placemark.styleUrl]
-            val markerOptions =
+            var markerOptions =
                 MarkerOptions()
                     .position(placemark.ll)
                     .title(placemark.name)
-            //.snippet(placemark.description)
+            if (placemark.snippet != null && placemark.snippet != "" ) markerOptions.snippet(placemark.snippet )
 
             if (kmlStyle?.href != null) {
                 if (!kmlStyle!!.href!!.startsWith("http://") && !kmlStyle!!.href!!.startsWith("https://")) {
@@ -161,5 +174,17 @@ class MyMapManager() {
         }
         myMapLL = null
         return false
+    }
+
+    private inner class PowerConnectionReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            /*
+            if (intent.action == Intent.ACTION_POWER_CONNECTED) {
+                Toast.makeText(context, "ケーブルを接続した", Toast.LENGTH_LONG).show()
+            } else if (intent.action == Intent.ACTION_POWER_DISCONNECTED) {
+                Toast.makeText(context, "ケーブルを抜いた", Toast.LENGTH_LONG).show()
+            }
+             */
+        }
     }
 }

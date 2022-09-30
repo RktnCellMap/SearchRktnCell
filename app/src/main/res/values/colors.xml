@@ -5,7 +5,7 @@
     <color name="colorAccent">#03DAC5</color>
 
     <color name="colorDocomo">#CC0033</color>
-    <color name="colorAu">#EB5505</color>
+    <color name="colorAu">#0E0D6A</color>
     <color name="colorSoftbank">#B6BBBE</color>
     <color name="colorRakuten">#FF008C</color>
     <color name="colorForeign">#C0C0C0</color>
@@ -14,20 +14,10 @@
 
     <color name="colorMlsStroke">#80FF008C</color>
     <color name="colorMlsFill">#40FF008C</color>
-<!--
-    .strokeColor(Color.argb(128, 255, 0, 140))
-    .fillColor(Color.argb(64, 255, 0, 140))
--->
+
     <color name="colorSignal1">#44FF44</color> <!-- 強：緑 -->
     <color name="colorSignal2">#F0F000</color> <!-- 中：黄 -->
     <color name="colorSignal3">#F39800</color> <!-- 弱：オレンジ -->
     <color name="colorSignal4">#FF4444</color> <!-- ぴえん：赤 -->
 
-
-<!--
-    (-98 <= rsrp) -> Color.rgb(68, 255, 68) // 強：緑
-    (-108 <= rsrp) -> Color.rgb(240, 240, 0)    // 中：黄
-    (-118 <= rsrp) -> Color.rgb(243, 152, 0)    // 弱：オレンジ
-    else -> Color.rgb(255, 68, 68)  // ぴえん：赤
--->
 </resources>

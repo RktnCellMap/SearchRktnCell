@@ -33,52 +33,12 @@ class MlsManager {
         private val LINE_PATTERN_1: List<PatternItem> = listOf(GAP, DASH)
     }
 
-    /*
     fun readMls(url: String, cacheFile: File, bReload: Boolean) {
         val cutOff: Long = System.currentTimeMillis() - 60 * 60 * 1000
         if (bReload || !cacheFile.exists() || cacheFile.lastModified() < cutOff) {
             // 明示的なリロード、キャッシュが存在しない、古い場合　はサーバーから取得
-            downloadMls44011(url, cacheFile)
-        } else {
-            // あればそこから
-            parseMlsJson(cacheFile)
-        }
-    }
-
-    private fun downloadMls44011(url: String, cacheFile: File) {
-        println("＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLSダウンロード開始します")
-        val client = OkHttpClient()
-        val request = Request.Builder()
-            .url(url)
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                println("＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLSダウンロード失敗")
-                println(e)
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                val contents = response.body?.string()
-
-                if (contents != null) {
-                    cacheFile.outputStream().use {
-                        it.write(contents.toByteArray())
-                    }
-                    println("＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLSダウンロードし、キャッシュを保存しますた")
-
-                    parseMlsJson(cacheFile)
-                }
-            }
-        })
-    }
-    */
-
-    fun readMls(url: String, cacheFile: File, bReload: Boolean) {
-        val cutOff: Long = System.currentTimeMillis() - 60 * 60 * 1000
-        if (bReload || !cacheFile.exists() || cacheFile.lastModified() < cutOff) {
-            // 明示的なリロード、キャッシュが存在しない、古い場合　はサーバーから取得
-            val inputStream = downloadMls44011(url, cacheFile)
+            println("＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLSダウンロード開始します")
+            val inputStream =  Utils.getInputStreamFromUrlString(url)
             if(inputStream!=null) {
                 Utils.saveFromInputStream(inputStream, cacheFile)
             }
@@ -86,20 +46,12 @@ class MlsManager {
         parseMlsJson(cacheFile)
     }
 
-
-    @Throws(IOException::class)
-    private fun downloadMls44011(urlString: String, cacheFile: File): InputStream? {
-        println("＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLSダウンロード開始します")
-        return Utils.getInputStreamFromUrlString(urlString)
-    }
-
     private fun parseMlsJson(cacheFile: File) {
-        //val instance = MapsActivity.getInstance()
         println("＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLS読み込み開始します")
         val contents = cacheFile.readText(Charsets.UTF_8)
         println("＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLS読み込みました")
 
-        // TODO 高速化
+        // TODO 高速化(現状でも十分かも)
         val mapper = jacksonObjectMapper()
 
         val cellAry: List<MlsCellInfo>
