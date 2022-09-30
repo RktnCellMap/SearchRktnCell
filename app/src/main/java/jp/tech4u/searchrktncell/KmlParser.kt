@@ -260,7 +260,7 @@ class KmlParser {
 
         val eciList = mutableListOf<Long>()
         if (b3enb != "" && b3ci != "") {
-            val enb = b3enb.toLong()
+            val enb = b3enb.toFloat().toLong()  // 小数点がついている場合があるので、一旦floatにしています
             val ciAry = b3ci.split('/')
             for (ciStr in ciAry) {
                 val ci = ciStr.toInt()
