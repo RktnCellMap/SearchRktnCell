@@ -1,6 +1,7 @@
 package jp.tech4u.searchrktncell
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.*
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -8,9 +9,11 @@ import android.content.res.Resources
 import android.graphics.drawable.Animatable
 import android.location.Location
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.telephony.CellInfo
 import android.telephony.PhoneStateListener
 import android.telephony.SignalStrength
@@ -24,6 +27,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.ActivityCompat
@@ -105,6 +109,30 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var powerConnectionReceiver: PowerConnectionReceiver
 
+    // Register the permissions callback, which handles the user's response to the
+    // system permissions dialog. Save the return value, an instance of
+    // ActivityResultLauncher. You can use either a val, as shown in this snippet,
+    // or a lateinit var in your onAttach() or onCreate() method.
+    private val requestPermissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { permissions ->
+            when {
+                permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) -> {
+                    // 権限を取得したのでもう一度setMyLocationEnabled()を呼び出す
+                    setMyLocationEnabled()
+                }
+                permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false) -> {
+                    // （精度低い方だけど）権限を取得したのでもう一度setMyLocationEnabled()を呼び出す
+                    setMyLocationEnabled()
+                }
+                else -> {
+                    // 権限を取得できなかったので諦める
+                    Toast.makeText(this, "位置情報の権限がありません", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
     private lateinit var darkMapStyle: MapStyleOptions
 
     // 最後に得た現在地（PhoneStateListenerで参照）
@@ -151,7 +179,7 @@ class MapsActivity : AppCompatActivity(),
         filter.addAction(Intent.ACTION_BATTERY_CHANGED)
         registerReceiver(powerConnectionReceiver, filter)
 
-        requestPermission()
+        //checkPermission()
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         // 訳：SupportMapFragmentを取得し、マップを使用する準備ができたら通知（訳註：onMapReady()）を受け取ります。
@@ -218,21 +246,21 @@ class MapsActivity : AppCompatActivity(),
 
     // 現在のテーマを調べ、それを反映する
     private fun setTheme() {
-        // アプリ設定を見て判断。アプリ設定がFOLLOW_SYSTEMなら、システム設定を見る。
-        val bDark = when(Utils.getPreferenceString("theme", "MODE_NIGHT_FOLLOW_SYSTEM")) {
-            "MODE_NIGHT_YES" -> true
-            "MODE_NIGHT_NO" -> false
-            else -> {
-                // システム設定を見る
-                val configuration = applicationContext.resources.configuration
-                val currentNightMode = configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-                currentNightMode == Configuration.UI_MODE_NIGHT_YES
-            }
-        }
-
-        val style = if (bDark) darkMapStyle else null
-        Log.e(localClassName, "setTheme() $bDark")
         try {
+            // アプリ設定を見て判断。アプリ設定がFOLLOW_SYSTEMなら、システム設定を見る。
+            val bDark = when (Utils.getPreferenceString("theme", "MODE_NIGHT_FOLLOW_SYSTEM")) {
+                "MODE_NIGHT_YES" -> true
+                "MODE_NIGHT_NO" -> false
+                else -> {
+                    // システム設定を見る
+                    val configuration = applicationContext.resources.configuration
+                    val currentNightMode = configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+                    currentNightMode == Configuration.UI_MODE_NIGHT_YES
+                }
+            }
+
+            val style = if (bDark) darkMapStyle else null
+            Log.e(localClassName, "setTheme() $bDark")
             val success = mMap.setMapStyle(style)
             if (!success) {
                 Log.e(localClassName, "Style parsing failed.")
@@ -244,8 +272,7 @@ class MapsActivity : AppCompatActivity(),
             btnGps.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
 
 
-
-        } catch (e: UninitializedPropertyAccessException ) {
+        } catch (e: UninitializedPropertyAccessException) {
             // 設定でテーマが指定されていると、起動時にmMapがコレ。
             // 問題ないので握りつぶす。
         } catch (e: Resources.NotFoundException) {
@@ -452,13 +479,6 @@ class MapsActivity : AppCompatActivity(),
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
             return
         }
         val cellInfoAry = tm.allCellInfo
@@ -701,92 +721,84 @@ class MapsActivity : AppCompatActivity(),
         app.recordManager.plotAll(mMap, CellId(0))
     }
 
-    private fun requestPermission() {
-        val permissionAccessCoarseLocationApproved =
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
-                    PackageManager.PERMISSION_GRANTED &&
-                    ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-                    PackageManager.PERMISSION_GRANTED
 
-        if (permissionAccessCoarseLocationApproved) {
-            val backgroundLocationPermissionApproved = ActivityCompat
-                .checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
-                    PackageManager.PERMISSION_GRANTED
-
-            if (backgroundLocationPermissionApproved) {
-                // フォアグラウンドとバックグランドのバーミッションがある
-            } else {
-                // フォアグラウンドのみOKなので、バックグラウンドの許可を求める
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
-                    PERMISSION_REQUEST_CODE
-                )
-            }
-        } else {
-            // 位置情報の権限が無いため、許可を求める
-            ActivityCompat.requestPermissions(
+    // 権限有無をチェックする
+    // 権限がない場合、かつ、bRequestがtrue なら、権限要求をする
+    private fun checkPermission(bRequest:Boolean) :Boolean {
+        if (ContextCompat.checkSelfPermission(
                 this,
-                arrayOf(
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                ),
-                PERMISSION_REQUEST_CODE
-            )
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+            return true
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+            return true
+
+        if (bRequest) {
+            showRequestPermissionUI(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+        return false
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            onRequestLocationPermissionsResult(permissions, grantResults)
+    private fun showRequestPermissionUI(permission:String) {
+        val shouldShow = shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
+        var msg = when (permission) {
+            Manifest.permission.ACCESS_FINE_LOCATION -> "現在地を取得するため、位置情報の権限が必要です。"
+            Manifest.permission.READ_PHONE_STATE -> "基地局情報を取得するため、電話の権限が必要です。本アプリは電話の権限を基地局情報の取得のみに用い、電話をかけるなどの操作は行いません。"
+            else -> ""
         }
-    }
+        // READ_PHONE_STATE は今は未使用。
 
-    private fun onRequestLocationPermissionsResult(permissions: Array<String>, grantResults: IntArray) {
-        if (permissions.size != grantResults.size) {
-            // ココには来ないはず
-            return
+        var okBtnLabel = "OK"
+        if (shouldShow) {
+            msg += "\n本アプリの設定画面から権限を許可してください"
+            okBtnLabel = "設定画面を開く"
         }
-        var allow = false
-        var deny = false
-        val size = permissions.size
-        for (i in 0 until size) {
-            if (permissions[i] == Manifest.permission.ACCESS_COARSE_LOCATION || permissions[i] == Manifest.permission.ACCESS_FINE_LOCATION) {
-                if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                    allow = true
-                } else {
-                    deny = true
-                }
+
+        val alertDialogBuilder = AlertDialog.Builder(this)
+            //.setTitle("権限")
+            .setMessage(msg)
+        if (shouldShow) {
+            alertDialogBuilder.setPositiveButton(okBtnLabel) { dialog, which ->
+                // 本アプリの設定画面を開く
+                val packageUri = "package:jp.tech4u.searchrktncell"
+                val settingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse(packageUri))
+                settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(settingsIntent)
+            }
+            alertDialogBuilder.setNegativeButton("Cancel", null)
+        } else {
+            alertDialogBuilder.setPositiveButton(okBtnLabel) { dialog, which ->
+                requestPermission()
             }
         }
-        if (allow) {
-            // 権限を取得したのでもう一度setMyLocationEnabled()を呼び出す
-            setMyLocationEnabled()
+        alertDialogBuilder.show()
+    }
+
+    private fun requestPermission() {
+        var permissionArray = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+            // 参考 https://spirits.appirits.com/type/technology/11780/
+            permissionArray += Manifest.permission.ACCESS_BACKGROUND_LOCATION
         }
-        // 注：else if じゃないです
-        if (deny) {
-            // 権限を取得できなかったので諦める
-            Toast.makeText(this, "No location permissions granted", Toast.LENGTH_LONG).show()
-        }
+        // 今のところ、実は ACCESS_BACKGROUND_LOCATION は必要ないが、将来のバックグラウンド処理対応のために取得している。
+
+        requestPermissionLauncher.launch(permissionArray)
     }
 
     // mMap.isMyLocationEnabled の、権限考慮版
     private fun setMyLocationEnabled() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED
-            && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this, arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ), PERMISSION_REQUEST_CODE
-            )
+        if ( !checkPermission(true) ) {
             return
         }
+
         mMap.isMyLocationEnabled = true
 
         // 権限が必要なので、ここでやる。
@@ -981,21 +993,7 @@ class MapsActivity : AppCompatActivity(),
 
         Log.d(localClassName, "enableLocation")
 
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
+        if (!checkPermission(true)) {
             return
         }
         fusedLocationClient.lastLocation.addOnSuccessListener {

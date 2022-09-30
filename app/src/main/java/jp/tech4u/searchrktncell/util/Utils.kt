@@ -183,16 +183,16 @@ object Utils {
     fun getMyMapMid(key:String): String {
         var mid = ""
         try {
-            val myMapUrl = getPreferenceString(key, null)
-            if (myMapUrl != null) {
-                mid = getMyMapMidFromUrl(myMapUrl)
-            }
+                val myMapUrl = getPreferenceString(key, null)
+                if (myMapUrl != null) {
+                    mid = getMyMapMidFromUrl(myMapUrl)
+                }
         } catch (e: Exception) {
             // マイマップURI解析失敗
             // ユーザーへの通知は、、、まあいいや・・・
         }
         return mid
-    }
+            }
 
     // 設定からマイマップURLを引き、KMZアクセス用URLに変換して返す
     // （最後が.kmzならそのまま、マイマップっぽかったらマイマップ用URL）

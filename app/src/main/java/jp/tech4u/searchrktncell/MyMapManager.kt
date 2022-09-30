@@ -101,7 +101,7 @@ class MyMapManager {
             var mid = Utils.getMyMapMid(key)
             if ( mid !="") {
                 // kmzの場合の名前表示は未対応です・・・
-                upsertMidAttribute(mid, kmlParser.name, kmlParser.description)
+            upsertMidAttribute(mid, kmlParser.name, kmlParser.description)
             }
             if (kmlParser.eciDefined) {
                 eciDefined = true
