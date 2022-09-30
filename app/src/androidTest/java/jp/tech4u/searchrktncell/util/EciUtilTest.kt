@@ -41,6 +41,15 @@ class EciUtilTest {
         eciAry = EciUtil.getEciFromMemo("2020.11.24 1015829-1,1015827-1\n車載基地局\n21.1 三里塚開局に伴い撤退？")
         Assert.assertArrayEquals(longArrayOf(1015829 * 256 + 1), eciAry.toLongArray())
         Assert.assertEquals("1015829-1", EciUtil.getEnbLcid(eciAry))
+
+        // 範囲
+        eciAry = EciUtil.getEciFromMemo("end:279785-1~5<br>")
+        Assert.assertEquals("279785-1~5", EciUtil.getEnbLcid(eciAry))
+        Assert.assertArrayEquals(longArrayOf(71624961, 71624962, 71624963, 71624964, 71624965), eciAry.toLongArray())
+
+        // 空テスト
+        eciAry = listOf<Long>()
+        Assert.assertEquals("", EciUtil.getEnbLcid(eciAry))
     }
 
     @Test

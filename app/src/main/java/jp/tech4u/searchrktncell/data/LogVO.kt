@@ -16,6 +16,7 @@ data class LogVO (
     val bw: Int = 0,
     val ta: Int = 0,
     val pci: Int = 0,
+    val gen: Int = 4,
     var debug: DebugVO? = null,
 ) {
     fun bwStr() = if (this.bw == CellInfo.UNAVAILABLE) "-" else "${this.bw / 1000}MHz"

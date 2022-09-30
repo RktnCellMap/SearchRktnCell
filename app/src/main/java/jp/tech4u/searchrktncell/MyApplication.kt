@@ -50,6 +50,12 @@ class MyApplication : Application() {
         }
     }
 
+    fun restartApp() {
+        val intent = RestartActivity.createIntent(applicationContext)
+        // RestartActivity を起動（AndroidManifest.xml での宣言により別プロセスで起動する
+        applicationContext.startActivity(intent)
+    }
+
     private val MIGRATION_1_2 = object : Migration(1, 2) {
         override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("CREATE TABLE IF NOT EXISTS `GoogleMyMapEntity` (`mid` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, PRIMARY KEY(`mid`))")

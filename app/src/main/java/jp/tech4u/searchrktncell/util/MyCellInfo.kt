@@ -5,6 +5,18 @@ import android.telephony.*
 
 //// CellIdentity ////
 
+val CellInfo.gen: Int
+    get() =
+        if (this is CellInfoLte) {
+            4
+        } else if (29 <= Build.VERSION.SDK_INT && this is CellInfoNr) {
+            5
+        } else if (this is CellInfoWcdma) {
+            3
+        } else {
+            2
+        }
+
 val CellInfo.mccString: String?
     get() =
         if (28 <= Build.VERSION.SDK_INT) {

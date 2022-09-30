@@ -271,7 +271,17 @@
             app:key="version"
             app:title="バージョン"
             app:summary="x.x.x"
-    />
+            />
+    <Preference
+            app:key="exportPreferenceButton"
+            app:title="設定エクスポート"
+            app:summary="設定をファイルに書き出します"
+            />
+    <Preference
+            app:key="importPreferenceButton"
+            app:title="設定インポート"
+            app:summary="設定をファイルから読み込みます"
+            />
     <Preference
             app:key="destination"
             app:title="目的地(lat,lan)"

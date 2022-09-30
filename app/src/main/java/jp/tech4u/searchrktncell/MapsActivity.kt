@@ -881,7 +881,7 @@ class MapsActivity : AppCompatActivity(),
                     latlng.latitude, latlng.longitude,
                     cellInfo.mccString, cellInfo.mncString,
                     cellInfo.tac, cellInfo.ci,
-                    cellInfo.rsrp, cellInfo.bandwidth, cellInfo.timingAdvance, cellInfo.pci
+                    cellInfo.rsrp, cellInfo.bandwidth, cellInfo.timingAdvance, cellInfo.pci, cellInfo.gen
                 )
                 if (DebugCellInfo.USE_GPS_LOG) {
                     val debugVO = DebugVO(
@@ -991,7 +991,7 @@ class MapsActivity : AppCompatActivity(),
             txtCellInfoTac.visibility = View.INVISIBLE
             txtCellInfoPci.visibility = View.INVISIBLE
         } else {
-            if (logVO == null || "440" != logVO.mccString || "11" != logVO.mncString) {
+            if (logVO == null || "440" != logVO.mccString || "11" != logVO.mncString|| 4 != logVO.gen) {
                 // 他キャリア
                 txtCellInfoEci.text = ""
                 txtCellInfoTac.text = ""

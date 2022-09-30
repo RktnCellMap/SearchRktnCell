@@ -17,6 +17,9 @@ object EciUtil {
     // 足立
     private val regexEnbAdt = Regex("($regEnb)-($regLcid)(-$regLcid)+\\b")
 
+    // レンジ定義
+    private val regexEnbRange = Regex("($regEnb)-($regLcid)~($regLcid)\\b")
+
     /**
      * eNB-LCIDの文字列を正規表現にかけたものからCellIDを取得する.
      *
@@ -24,7 +27,7 @@ object EciUtil {
      * @args d2 LCID部分のデリミタ
      * @return return CellIDのリスト
      */
-    private fun convEciArray(matchResult: MatchResult, d2:Char): List<Long> {
+    private fun convEciArray(matchResult: MatchResult, d2: Char): List<Long> {
         val eNB = matchResult.groupValues[1]
         val neNB256 = eNB.toLong() * 256
 
@@ -45,6 +48,26 @@ object EciUtil {
     }
 
     /**
+     * eNB-LCIDの文字列を正規表現にかけたものからCellIDを取得する.レンジ表現用.
+     *
+     * @args matchResult 正規表現にかけた結果
+     * @return return CellIDのリスト
+     */
+    private fun convEciArray(matchResult: MatchResult): List<Long> {
+        val eNB = matchResult.groupValues[1]
+        val neNB256 = eNB.toLong() * 256
+
+        val lcidFrom = matchResult.groupValues[2].toInt()
+        val lcidTo = matchResult.groupValues[3].toInt()
+
+        val result = mutableListOf<Long>()
+        for (lcid in (lcidFrom..lcidTo)) {
+            result.add(neNB256 + lcid)
+        }
+        return result
+    }
+
+    /**
      * eNB-LCIDらしき記述を含むであろう文字列からCellIDを取得する.
      *
      * @args value eNB-LCIDらしき記述を含むであろう文字列
@@ -52,6 +75,10 @@ object EciUtil {
      */
     fun getEciFromMemo(value: String): List<Long> {
         var matchResult: MatchResult?
+
+        // レンジ
+        matchResult = regexEnbRange.find(value)
+        if (matchResult != null) return convEciArray(matchResult)
 
         // 標準
         matchResult = regexEnbStd.find(value)
@@ -81,16 +108,29 @@ object EciUtil {
      */
     fun getEnbLcid(eciList: List<Long>): String {
         var enbLcid = ""
-        var lastEnb = -1L
-        for (eci in eciList) {
-            val enb = eci / 256
-            val lcid = eci % 256
-            when {
-                enbLcid == "" -> enbLcid = "$enb-$lcid"     // 先頭
-                lastEnb != enb -> enbLcid += " $enb-$lcid"  // データが変だと eNBが複数ある場合があり、その対応
-                else -> enbLcid += ",$lcid" // 2番目以降
+        if (eciList.count() == 0) return enbLcid
+
+        val eciFirst = eciList[0]
+        val eciLast = eciList[eciList.count() - 1]
+
+        if (3 < eciList.count() && (eciLast - eciFirst).toInt() == eciList.count() - 1) {
+            // 3つを超える場合（かつ数があっている場合）は範囲表現
+            val enb = eciFirst / 256
+            val lcidFirst = eciFirst % 256
+            val lcidLast = eciLast % 256
+            enbLcid = "$enb-$lcidFirst~$lcidLast"
+        } else {
+            var lastEnb = -1L
+            for (eci in eciList) {
+                val enb = eci / 256
+                val lcid = eci % 256
+                when {
+                    enbLcid == "" -> enbLcid = "$enb-$lcid"     // 先頭
+                    lastEnb != enb -> enbLcid += " $enb-$lcid"  // データが変だと eNBが複数ある場合があり、その対応
+                    else -> enbLcid += ",$lcid" // 2番目以降
+                }
+                lastEnb = enb
             }
-            lastEnb = enb
         }
         return enbLcid
     }

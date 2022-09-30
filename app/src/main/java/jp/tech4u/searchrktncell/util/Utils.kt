@@ -330,6 +330,14 @@ object Utils {
         return sharedPreferences.getInt(key, default)
     }
 
+    fun setPreferenceInt(key: String, value: Int) {
+        val context = MyApplication.getInstance()
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        sharedPreferences.edit()
+            .putInt(key, value)
+            .commit()
+    }
+
     fun getPreferenceBoolean(key: String, default: Boolean): Boolean {
         val context = MyApplication.getInstance()
         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
