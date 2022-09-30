@@ -1,18 +1,35 @@
 package jp.tech4u.searchrktncell
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Log
 import android.util.Xml
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.Marker
 import jp.tech4u.searchrktncell.util.EciUtil
+import jp.tech4u.searchrktncell.util.ZipUtil
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 
 private val ns: String? = null
 
 class KmlParser {
+    companion object {
+        private const val TAG = "KmlParser"
+    }
+
     val placemarks = mutableListOf<Placemark>()
     val kmlStyleMap = mutableMapOf<String, KmlStyle>()
+    var markerList = mutableListOf<Marker>()
+    val eciMap = mutableMapOf<Long, Placemark>()
+    lateinit var extDir: Path
+
     private val kmlStyleMapMap = mutableMapOf<String, String>()
     var name: String = ""
     var description: String = ""
@@ -35,23 +52,71 @@ class KmlParser {
         var scale: Float?
     )
 
-    @Throws(XmlPullParserException::class, IOException::class)
-    fun parse(inputStream: InputStream) {
+    fun clear() {
         placemarks.clear()
         kmlStyleMap.clear()
         kmlStyleMapMap.clear()
+        eciMap.clear()
+
         name = ""
         description = ""
+    }
+
+
+    fun loadBitmap(kmlStyle: KmlStyle): Bitmap? {
+        val iconPath = Paths.get(extDir.toString(), kmlStyle.href)
+        val path = iconPath.toString()
+        return BitmapFactory.decodeFile(path)
+    }
+
+    // KML解析（裏スレッド）
+    fun parseMyMap(cacheFile: File) {
+        Log.i(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込み開始します")
+
+        val name = cacheFile.nameWithoutExtension
+
+        @Suppress("RECEIVER_NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
+        val parent: String = cacheFile.parent.toString()
+        extDir = Paths.get(parent, name)
+        val kmlFilePath = Paths.get(parent, name, "doc.kml")
+
+        try {
+            ZipUtil.unzipFile(cacheFile.toPath(), extDir)
+
+            this.parse(Files.newInputStream(kmlFilePath))
+        } catch (e: Exception) {
+            Log.w(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込み失敗しました")
+            Log.w(TAG, e.toString())
+            this.clear()
+        }
+        if (this.eciMap.isNotEmpty())
+            Log.i(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込みました")
+    }
+
+    @Throws(XmlPullParserException::class, IOException::class)
+    fun parse(inputStream: InputStream) {
+        this.clear()
         inputStream.use {
             val parser: XmlPullParser = Xml.newPullParser()
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
             parser.setInput(it, null)
             parser.nextTag()
             readKml(parser)
+
+            createEciMap()
         }
         for ((k, v) in kmlStyleMapMap) {
             if (kmlStyleMap[v] != null) {
                 kmlStyleMap[k] = kmlStyleMap[v]!!
+            }
+        }
+    }
+
+    // placemarks から eciMap を作る
+    private fun createEciMap() {
+        for (placemark in placemarks) {
+            for (eci in placemark.eciAry) {
+                eciMap[eci] = placemark
             }
         }
     }

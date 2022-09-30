@@ -36,6 +36,9 @@ import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
+import android.content.Intent
+import android.net.Uri
+
 
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
@@ -53,6 +56,9 @@ class MapsActivity : AppCompatActivity(),
         // 地図表示初期位置
         private val initialMapPos = LatLng(36.0, 140.0)
         private const val initialMapZoom = 7f
+
+        // root_preferences.xml のマイマップ定義の個数と合わせてください
+        private val myMapUrlKeys = arrayOf("myMapUrl", "myMapUrl2", "myMapUrl3", "myMapUrl4", "myMapUrl5")
 
         // あんまりやりたくないけど、みんなコレどうしてんだろう？
         fun getInstance(): MapsActivity {
@@ -81,6 +87,7 @@ class MapsActivity : AppCompatActivity(),
     // UI部品
     private lateinit var cellInfoView: CellInfoView
     private lateinit var txtCellName: TextView
+    private lateinit var txtLatLng: TextView
     private lateinit var btnGps: ImageButton
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -106,10 +113,12 @@ class MapsActivity : AppCompatActivity(),
 
         cellInfoView = findViewById(R.id.cellInfoView)
         txtCellName = findViewById(R.id.txtCellName)
+        txtLatLng = findViewById(R.id.txtLatLng)
         btnGps = findViewById(R.id.btnGps)
 
         cellInfoView.setOnTouchListener(onTouchListener)
         btnGps.setOnClickListener { enableLocation() }
+        txtLatLng.setOnClickListener { onClickTxtLatLng() }
 
         //btnGps.setImageResource(R.drawable.gps_not_fixed)
         (btnGps.drawable as Animatable).start()
@@ -130,7 +139,9 @@ class MapsActivity : AppCompatActivity(),
         mapFragment.getMapAsync(this)
 
         val app = MyApplication.getInstance()
-        app.mlsManager.readRadioInfo()
+        if (!DebugCellInfo.DISABLE_RADIO_INFO) {
+            app.mlsManager.readRadioInfo()
+        }
 
         scope.launch {
             readMls(false)
@@ -151,6 +162,10 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
+    private fun onClickTxtLatLng() {
+        Log.d(localClassName, "onClickTxtLatLng")
+    }
+
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
         //myMapManager.init(mMap)
@@ -164,6 +179,8 @@ class MapsActivity : AppCompatActivity(),
         //mMap.isMyLocationEnabled = true   // ←権限的にそう簡単にいかない・・・
         setMyLocationEnabled()  // 権限考慮版
 
+        val density = resources.displayMetrics.density
+        mMap.setPadding(0, (34 * density).toInt(), 0, (34 * density).toInt())
         mMap.setOnCameraMoveStartedListener(this)
         mMap.setOnMyLocationButtonClickListener(this)
 
@@ -174,7 +191,9 @@ class MapsActivity : AppCompatActivity(),
 
         // 早めにやるとぬるぽ
         if (DebugCellInfo.DEBUG_CELL_INFO_ENABLE) {
-            debugTimerHandler.postDelayed(debugTimerRunnable, 5000L)
+            if (debugCellInfo != null && debugCellInfo!!.isAvailable()) {
+                debugTimerHandler.postDelayed(debugTimerRunnable, 5000L)
+            }
         }
     }
 
@@ -295,7 +314,7 @@ class MapsActivity : AppCompatActivity(),
 
     private fun onLocation(location: Location) {
         val latlng = LatLng(location.latitude, location.longitude)
-        Log.d(localClassName, "onLocation ${latlng.latitude} , ${latlng.longitude}")
+        Log.v(localClassName, "onLocation ${latlng.latitude} , ${latlng.longitude}")
 
         if (mMap.cameraPosition.zoom == initialMapZoom) {
             // 現在地 初回
@@ -379,6 +398,7 @@ class MapsActivity : AppCompatActivity(),
         // 圏外の場合は、上のビューに圏外表示
         if (lastLogVO == null) {
             cellInfoView.drawCellInfoView(null)
+            app.myMapManager.removeLocLine()
             app.mlsManager.removeMls()
         } else {
             //// 基地局表示
@@ -407,7 +427,11 @@ class MapsActivity : AppCompatActivity(),
         )
 
         // 地図表示位置反映
-        if (bMoveCurrentLocation) moveTo(latlng)
+        if (bMoveCurrentLocation) {
+            moveTo(latlng)
+        } else {
+            txtLatLng.visibility = View.INVISIBLE
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -418,8 +442,17 @@ class MapsActivity : AppCompatActivity(),
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        val mid = Utils.getMyMapMid()
-        menu.findItem(R.id.reloadMyMap).isEnabled = mid != ""
+        // マイマップURLが1つでも設定されていたら、マイマップリロードのメニューを活性にする
+        var bEnable = false
+        for (key in myMapUrlKeys) {
+            val mid = Utils.getMyMapMid(key)
+            if (mid != "") {
+                bEnable = true
+                break
+            }
+        }
+        menu.findItem(R.id.reloadMyMap).isEnabled = bEnable
+
         return true
     }
 
@@ -431,9 +464,15 @@ class MapsActivity : AppCompatActivity(),
             R.id.reloadMls -> scope.launch { readMls(false) }
             R.id.reloadMyMap -> reloadMyMap(true)
             R.id.settings -> startActivity(Intent(this@MapsActivity, SettingsActivity::class.java))
+            R.id.myMapList -> openUrl("https://cellmap.rukihena.com/mymaplist.html")
+            R.id.appPage -> openUrl("https://cellmap.rukihena.com/SearchRktnCell/")
         }
-
         return true
+    }
+
+    private fun openUrl(url:String) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        startActivity(intent)
     }
 
     private fun createLogFileObj(): File {
@@ -447,36 +486,35 @@ class MapsActivity : AppCompatActivity(),
         val app = MyApplication.getInstance()
 
         btnGps.setImageResource(R.drawable.gps_fixed)
+        txtLatLng.text = "${latlng.latitude},${latlng.longitude}"
+        txtLatLng.visibility = View.VISIBLE
 
         // 現在地追従モードが基地局連動かどうか
         val bMode = Utils.getPreferenceBoolean("locationMode", true)
 
+        var llBuilder: LatLngBounds.Builder? = null
         if (bMode && app.myMapManager.myMapLL != null) {
             // 基地局連動モードで、マイマップから基地局発見の場合
-            val llBuilder = LatLngBounds.Builder()
+            llBuilder = LatLngBounds.Builder()
             llBuilder.include(app.myMapManager.myMapLL!!)
-            llBuilder.include(latlng)
-            // 拡大しすぎないように最低限のエリアを含める
-            llBuilder.include(LatLng(latlng.latitude - 0.006, latlng.longitude - 0.006 * 0.8))
-            llBuilder.include(LatLng(latlng.latitude + 0.006, latlng.longitude + 0.006 * 0.8))
-
-            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(llBuilder.build(), 100), cameraMoveDurationMs, null)
         } else if (bMode && app.mlsManager.foundMlsBounds != null) {
             // 基地局連動モードで、（マイマップから基地局発見できず、）MLSから基地局発見の場合
-            val llBuilder = LatLngBounds.Builder()
+            llBuilder = LatLngBounds.Builder()
             llBuilder.include(app.mlsManager.foundMlsBounds!!.northeast)
             llBuilder.include(app.mlsManager.foundMlsBounds!!.southwest)
+        }
+
+        if (llBuilder != null) {
             llBuilder.include(latlng)
             // 拡大しすぎないように最低限のエリアを含める(MLSの場合はより拡大傾向)
             llBuilder.include(LatLng(latlng.latitude - 0.003, latlng.longitude - 0.003 * 0.8))
             llBuilder.include(LatLng(latlng.latitude + 0.003, latlng.longitude + 0.003 * 0.8))
+            // 参考：0.00001[度]≒1.11[m]  cos(36)≒0.8
 
             mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(llBuilder.build(), 100), cameraMoveDurationMs, null)
         } else {
             mMap.animateCamera(CameraUpdateFactory.newLatLng(latlng), cameraMoveDurationMs, null)
         }
-
-        // 参考：0.00001[度]≒1.11[m]  cos(36)≒0.8
     }
 
     private fun readLogAndPutMarker() {
@@ -581,41 +619,40 @@ class MapsActivity : AppCompatActivity(),
         tm.listen(phoneStateListener, PhoneStateListener.LISTEN_CELL_INFO or PhoneStateListener.LISTEN_SIGNAL_STRENGTHS)
     }
 
-    private fun reloadMyMap(dispError: Boolean) {
-        val mid = Utils.getMyMapMid()
-        if (mid != "") {
-            scope.launch {
-                reloadMyMap(mid, true)
-            }
-        } else {
-            if (dispError) {
-                Toast.makeText(applicationContext, "マイマップURL未設定（またはエラー）", Toast.LENGTH_LONG).show()
+    private fun reloadMyMap(bReload: Boolean) {
+        for ((index, key) in myMapUrlKeys.withIndex()) {
+
+            val mid = Utils.getMyMapMid(key)
+            if (mid != "") {
+                scope.launch {
+                    reloadMyMap(index, mid, bReload)
+                }
             }
         }
     }
 
-    private suspend fun reloadMyMap(mid: String, bReload: Boolean) {
+    private suspend fun reloadMyMap(index: Int, mid: String, bReload: Boolean) {
         try {
             // doInBackgroundメソッドと同等の処理
             val app = MyApplication.getInstance()
             val result = try {
                 val cacheFile = File(app.applicationContext.cacheDir, "$mid.kmz")
-                app.myMapManager.readMyMap(mid, cacheFile, bReload)
+                app.myMapManager.readMyMap(index, mid, cacheFile, bReload)
                 "OK"
             } catch (e: MyException) {
                 e.message ?: ""
             } catch (e: IOException) {
-                "マイマップダウンロード失敗"//resources.getString(R.string.connection_error)
+                "マイマップダウンロード失敗"
             } catch (e: XmlPullParserException) {
-                "マイマップ解析失敗"//resources.getString(R.string.xml_error)
+                "マイマップ解析失敗"
             } catch (e: Exception) {
-                "マイマップ読み込み失敗"//resources.getString(R.string.xml_error)
+                "マイマップ読み込み失敗"
             }
 
             // onPostExecuteメソッドと同等の処理
             withContext(Dispatchers.Main) {
                 if (result == "OK") {
-                    app.myMapManager.plotPlacemark(app.mMap)
+                    app.myMapManager.plotPlacemark(index, app.mMap)
                     val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
                     if (!bPlotMyMapCell) {
                         // マイマップが判明したので、消さなきゃいけない場合があるので、リプロットする
@@ -690,7 +727,7 @@ class MapsActivity : AppCompatActivity(),
     }
 
     override fun onCameraMoveStarted(reason: Int) {
-        Log.d(localClassName, "onCameraMoveStarted:$reason")
+        Log.v(localClassName, "onCameraMoveStarted:$reason")
         if (reason != GoogleMap.OnCameraMoveStartedListener.REASON_DEVELOPER_ANIMATION) {
             bMoveCurrentLocation = false
             btnGps.setImageResource(R.drawable.gps_off)
@@ -742,11 +779,28 @@ class MapsActivity : AppCompatActivity(),
                     stopLocationUpdates()
                     startLocationUpdates()
                 }
-                "myMapUrl" -> reloadMyMap(true)
                 "keepScreenOn" -> powerConnectionReceiver.setScreenOn()
                 "locationTimer", "locationTimerSecs" -> resetLocationTimer()
                 "plotPartner", "plotMyMapCell" -> app.recordManager.rePlot(mMap)
-                else -> Log.i(localClassName, "onSharedPreferenceChanged($key)")
+                else -> {
+                    var bMyMapUrl = false
+                    for ((index, keyName) in myMapUrlKeys.withIndex()) {
+                        // 該当マイマップだけリロード
+                        if (key == keyName) {
+                            val mid = Utils.getMyMapMid(key)
+                            if (mid != "") {
+                                scope.launch {
+                                    reloadMyMap(index, mid, true)
+                                }
+                            }
+                            bMyMapUrl = true
+                            break
+                        }
+                    }
+                    if (!bMyMapUrl) {
+                        Log.i(localClassName, "onSharedPreferenceChanged($key)")
+                    }
+                }
             }
         }
     }

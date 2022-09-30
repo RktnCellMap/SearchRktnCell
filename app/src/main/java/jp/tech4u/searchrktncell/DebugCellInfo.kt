@@ -20,9 +20,12 @@ class DebugCellInfo {
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210209_qurune.csv"
         private const val DEBUG_LOAD_LOG_FILENAME = ""    // リリースはコレ
 
-        private const val DEBUG_TRACE_LOG_START_INDEX = 0
+        private const val DEBUG_TRACE_LOG_START_INDEX = 2300
 
-        const val INTERVAL_MS = 200L        // 描画間隔[ms]
+        //const val DISABLE_RADIO_INFO = true
+        const val DISABLE_RADIO_INFO = false    // リリースはコレ
+
+        const val INTERVAL_MS = 100L        // 描画間隔[ms]
         private const val DISTANCE = 20f    // プ0ロット間隔[m]
     }
 
@@ -35,6 +38,13 @@ class DebugCellInfo {
     fun init() {
         val file = File(MyApplication.getInstance().externalCacheDir, DEBUG_LOAD_LOG_FILENAME)
         Utils.readLog(file, logList)
+
+        // 電測表示テスト用
+        /*
+        logList.clear()
+        val logVO = LogVO(0,35.0,136.0,"440","11", 123, 123456*256+1, -88, 20*1000, 2)
+        logList.add(logVO)
+         */
     }
 
     fun isAvailable() : Boolean {

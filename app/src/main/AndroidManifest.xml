@@ -25,7 +25,7 @@
         <!-- android:theme="@style/AppTheme" -->
         <activity
                 android:name=".setting.SettingsActivity"
-                android:label="@string/title_activity_settings">
+                android:label="設定">
         </activity>
         <!--
              The API key for Google Maps-based APIs is defined as a string resource.

@@ -120,19 +120,21 @@ class MlsManager {
         mlsLocLine?.remove()
         mlsLocLine = null
 
-        foundMlsBounds = null
-        lastCell = 0
         mlsLL = null
+        foundMlsBounds = null
+        lastCell = -1L
     }
 
     // 電測最良データ計算（最良かどうか判断し、最良なら記憶しておく）
     private fun calcBestRadioPoint(logVO: LogVO) {
+        val taTh = Utils.getPreferenceInt("radioInfoTaThreshold", 1)
+        val rsrpTh = Utils.getPreferenceInt("radioInfoRsrpThreshold", -70)
+
 
         // TAもRSRPもダメダメ→無視
-        if (1 < logVO.ta && logVO.rsrp < -70) return
+        if (taTh < logVO.ta && logVO.rsrp < rsrpTh) return
 
         val ri = RadioInfoEntity(logVO.ci, logVO.lat.toFloat(), logVO.lng.toFloat(), logVO.ta, logVO.rsrp)
-        val dao = MyApplication.database.radioInfoDao()
 
         if (radioInfoMap.contains(logVO.ci)) {
             val oldRi = radioInfoMap[logVO.ci]
@@ -169,8 +171,10 @@ class MlsManager {
 
             if (logVO.mncString != "11") return
 
-            // 電測最良データ計算
-            calcBestRadioPoint(logVO)
+            if (!DebugCellInfo.DISABLE_RADIO_INFO) {
+                // 電測最良データ計算
+                calcBestRadioPoint(logVO)
+            }
 
             val cellId = CellId(logVO.ci)
             val cellidBase = logVO.ci - cellId.sector3
@@ -267,14 +271,14 @@ class MlsManager {
         val diffS3 = CellId(mlsList[0].cell).sector3 - CellId(mlsList[1].cell).sector3
         val direction = (diffS3 == -1 || diffS3 == 2)
         // 3点目算出
-        val nLL = Utils.getThirdLL(mlsLL0, mlsLL1, direction)
+        val thirdLL = Utils.getThirdLL(mlsLL0, mlsLL1, direction)
 
         // 三角
         mlsPolygon = app.mMap.addPolygon(
             PolygonOptions()
                 .strokeWidth(0f)
                 .fillColor(ContextCompat.getColor(app, R.color.colorMlsFill))
-                .add(mlsLL0).add(mlsLL1).add(nLL)
+                .add(mlsLL0).add(mlsLL1).add(thirdLL)
         )
 
         // 実線
@@ -288,11 +292,11 @@ class MlsManager {
             PolylineOptions()
                 .color(ContextCompat.getColor(app, R.color.colorMlsStroke))
                 .pattern(LINE_PATTERN_1)
-                .add(mlsLL0).add(nLL).add(mlsLL1)
+                .add(mlsLL0).add(thirdLL).add(mlsLL1)
         )
 
         val llBuilder = LatLngBounds.Builder()
-        llBuilder.include(mlsLL0).include(mlsLL1).include(nLL)
+        llBuilder.include(mlsLL0).include(mlsLL1).include(thirdLL)
         foundMlsBounds = llBuilder.build()
 
         for (cellInfo in mlsList) {
@@ -301,7 +305,7 @@ class MlsManager {
             }
         }
         if (mlsLL == null) {
-            mlsLL = nLL
+            mlsLL = thirdLL
         }
     }
 

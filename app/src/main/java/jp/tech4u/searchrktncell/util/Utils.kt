@@ -158,10 +158,10 @@ object Utils {
     }
 
     // 設定からマイマップのMIDを取得する
-    fun getMyMapMid(): String {
+    fun getMyMapMid(key:String): String {
         var mid = ""
         try {
-            val myMapUrl = getPreferenceString("myMapUrl", null)
+            val myMapUrl = getPreferenceString(key, null)
             if (myMapUrl != null) {
                 val myMapUrlTrimmed = myMapUrl.trim()
                 if (myMapUrlTrimmed.length == 33) {

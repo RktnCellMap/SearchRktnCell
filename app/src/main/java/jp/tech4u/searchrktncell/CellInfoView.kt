@@ -141,7 +141,7 @@ class CellInfoView : View {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        Log.d(TAG, "CellInfoView.onDraw()")
+        Log.v(TAG, "CellInfoView.onDraw()")
 
         calcCoordinates()
         drawBar(canvas)

@@ -36,10 +36,9 @@
             app:showSeekBarValue="true"
     />
 
-
     <SeekBarPreference
             app:key="refreshInterval"
-            app:title="@string/refreshInterval_title"
+            app:title="現在地更新間隔"
             android:max="10"
             app:min="1"
             android:defaultValue="5"
@@ -48,7 +47,28 @@
 
     <EditTextPreference
             app:key="myMapUrl"
-            app:title="@string/myMapUrl_title"
+            app:title="GoogleマイマップURL"
+            app:useSimpleSummaryProvider="true"
+    />
+
+    <EditTextPreference
+            app:key="myMapUrl2"
+            app:title="GoogleマイマップURL2"
+            app:useSimpleSummaryProvider="true"
+    />
+    <EditTextPreference
+            app:key="myMapUrl3"
+            app:title="GoogleマイマップURL3"
+            app:useSimpleSummaryProvider="true"
+    />
+    <EditTextPreference
+            app:key="myMapUrl4"
+            app:title="GoogleマイマップURL4"
+            app:useSimpleSummaryProvider="true"
+    />
+    <EditTextPreference
+            app:key="myMapUrl5"
+            app:title="GoogleマイマップURL5"
             app:useSimpleSummaryProvider="true"
     />
 
@@ -75,6 +95,24 @@
             android:defaultValue="false"
     />
 
+    <SeekBarPreference
+            app:key="radioInfoTaThreshold"
+            app:title="最良電測ポイントの閾値・TA"
+            android:max="5"
+            app:min="0"
+            android:defaultValue="1"
+            app:showSeekBarValue="true"
+    />
+
+    <SeekBarPreference
+            app:key="radioInfoRsrpThreshold"
+            app:title="最良電測ポイントの閾値・RSRP"
+            android:max="-60"
+            app:min="-80"
+            android:defaultValue="-70"
+            app:showSeekBarValue="true"
+    />
+
     <SwitchPreference
             app:key="bwFromEarfcn"
             app:title="バンド幅取得元"
@@ -95,7 +133,7 @@
 
     <Preference
             app:key="version"
-            app:title="@string/version_title"
+            app:title="バージョン"
             app:summary="x.x.x"
     />
 
