@@ -7,7 +7,7 @@
             app:title="画面ON"
             app:entries="@array/keepScreenOnEntries"
             app:entryValues="@array/keepScreenOnEntryValues"
-            android:defaultValue="POWER"
+            android:defaultValue="ON"
             app:useSimpleSummaryProvider="true"
     />
 
@@ -57,7 +57,7 @@
             app:title="現在地更新間隔"
             android:max="10"
             app:min="1"
-            android:defaultValue="5"
+            android:defaultValue="1"
             app:showSeekBarValue="true"
     />
 

@@ -20,6 +20,7 @@ import android.telephony.CellInfo
 import android.telephony.PhoneStateListener
 import android.telephony.SignalStrength
 import android.telephony.TelephonyManager
+import android.telephony.TelephonyManager.CellInfoCallback
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
@@ -30,6 +31,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.ActivityCompat
@@ -88,6 +90,7 @@ class MapsActivity : AppCompatActivity(),
     private val scope = CoroutineScope(Dispatchers.Default)
 
     private lateinit var mMap: GoogleMap
+    private lateinit var telephonyManager: TelephonyManager
 
     private var debugCellInfo: DebugCellInfo? = null
     private val debugTimerHandler = Handler(Looper.getMainLooper())
@@ -117,6 +120,10 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var powerConnectionReceiver: PowerConnectionReceiver
 
+    private lateinit var locationCallback: LocationCallback
+    private lateinit var cellInfoUpdateRequestCallback: CellInfoCallback
+    private lateinit var phoneStateListener: PhoneStateListener
+
     // Register the permissions callback, which handles the user's response to the
     // system permissions dialog. Save the return value, an instance of
     // ActivityResultLauncher. You can use either a val, as shown in this snippet,
@@ -127,11 +134,15 @@ class MapsActivity : AppCompatActivity(),
         ) { permissions ->
             when {
                 permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) -> {
-                    // 権限を取得したのでもう一度setMyLocationEnabled()を呼び出す
-                    setMyLocationEnabled()
+                    // 権限を取得したので、引き続きREAD_PHONE_STATEを
+                    showRequestPermissionUI(Manifest.permission.READ_PHONE_STATE)
                 }
                 permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false) -> {
-                    // （精度低い方だけど）権限を取得したのでもう一度setMyLocationEnabled()を呼び出す
+                    // （精度低い方だけど）権限を取得したので、引き続きREAD_PHONE_STATEを
+                    showRequestPermissionUI(Manifest.permission.READ_PHONE_STATE)
+                }
+                permissions.getOrDefault(Manifest.permission.READ_PHONE_STATE, false) -> {
+                    // 権限を取得したのでもう一度setMyLocationEnabled()を呼び出す
                     setMyLocationEnabled()
                 }
                 else -> {
@@ -180,6 +191,9 @@ class MapsActivity : AppCompatActivity(),
         }
         scaleView = findViewById(R.id.scaleView)
         scaleView.metersOnly()
+
+        telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+        initListener()
 
         cellInfoView.setOnTouchListener(onTouchListener)
         btnGps.setOnClickListener { enableLocation() }
@@ -491,29 +505,6 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-    private val locationCallback = object : LocationCallback() {
-        override fun onLocationResult(locationResult: LocationResult?) {
-            locationResult ?: return
-            val location = locationResult.lastLocation
-            location ?: return
-
-            // 30秒以上前のデータなら無視
-            if (location.time < System.currentTimeMillis() - 30 * 1000) return
-
-            //// 精度15m未満なら無視
-            //if (location.accuracy < 15) return
-
-            /*
-            var pros = ""
-            for (loc in locationResult.locations) {
-                pros += "-" + loc.provider
-            }
-            Log.d(localClassName, "onLocationResult$pros")
-             */
-
-            onLocation(location)
-        }
-    }
 
     private val onTouchListener = View.OnTouchListener { v, event ->
         // ... Respond to touch events
@@ -544,36 +535,98 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-    private val phoneStateListener = object : PhoneStateListener() {
-        override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>?) {
-            super.onCellInfoChanged(cellInfo)
-            Log.i(localClassName, "onCellInfoChanged")
-            cellInfo ?: return  // SIMを抜いたときはnullなので
+    private fun initListener(){
 
-            val activeMnc = Utils.getActiveMnc(cellInfo)
-            if (activeMnc != "11") {
-                // 楽天以外なら無視（DualSIM機で、他社をチラチラ拾ってしまうことがあるため）
-                return
-            }
-            if (lastLocation != null) {
-                onDataEvent(cellInfo, lastLocation!!)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            cellInfoUpdateRequestCallback = object : CellInfoCallback() {
+                override fun onCellInfo(cellInfo: List<CellInfo>) {
+                    if (cellInfo == null) {
+                        Log.d(localClassName,"onCellInfo(): Null reported")
+                        return
+                    } else {
+                        //Log.d(localClassName,"onCellInfo(): Cell info update result: $cellInfo")
+                    }
+                    try {
+                        onCellUpdate(cellInfo)
+                    } catch (ex: SecurityException) {
+                        Log.e(localClassName, "onCellInfo(): Coarse location or phone permission is denied")
+                    }
+                }
+
+                override fun onError(errorCode: Int, detail: Throwable?) {
+                    Log.e(localClassName, detail.toString())
+                }
             }
         }
 
-        override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
-            super.onSignalStrengthsChanged(signalStrength)
-            Log.d(localClassName, "onSignalStrengthsChanged")
-            if (ActivityCompat.checkSelfPermission(
-                    MyApplication.getInstance(),
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult?) {
+                locationResult ?: return
+                val location = locationResult.lastLocation
+                location ?: return
+
+                // 30秒以上前のデータなら無視
+                if (location.time < System.currentTimeMillis() - 30 * 1000) return
+
+                //// 精度15m未満なら無視
+                //if (location.accuracy < 15) return
+
+                /*
+                var pros = ""
+                for (loc in locationResult.locations) {
+                    pros += "-" + loc.provider
+                }
+                Log.d(localClassName, "onLocationResult$pros")
+                 */
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    if (ActivityCompat.checkSelfPermission(
+                            applicationContext,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        return
+                    }
+                    telephonyManager.requestCellInfoUpdate(applicationContext.getMainExecutor(), cellInfoUpdateRequestCallback)
+                }
+
+                onLocation(location)
             }
-            if (lastLocation != null) {
-                val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
-                onDataEvent(tm.allCellInfo, lastLocation!!)
+        }
+
+        phoneStateListener = object : PhoneStateListener() {
+            override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>?) {
+                super.onCellInfoChanged(cellInfo)
+                Log.i(localClassName, "onCellInfoChanged")
+                cellInfo ?: return  // SIMを抜いたときはnullなので
+                onCellUpdate(cellInfo)
             }
+
+            override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
+                super.onSignalStrengthsChanged(signalStrength)
+                Log.d(localClassName, "onSignalStrengthsChanged")
+                if (ActivityCompat.checkSelfPermission(
+                        MyApplication.getInstance(),
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    return
+                }
+                if (lastLocation != null) {
+                    onDataEvent(telephonyManager.allCellInfo, lastLocation!!)
+                }
+            }
+        }
+    }
+
+    private fun onCellUpdate(cellInfo: List<CellInfo>){
+        val activeMnc = Utils.getActiveMnc(cellInfo)
+        if (activeMnc != "11") {
+            // 楽天以外なら無視（DualSIM機で、他社をチラチラ拾ってしまうことがあるため）
+            return
+        }
+        if (lastLocation != null) {
+            onDataEvent(cellInfo, lastLocation!!)
         }
     }
 
@@ -589,7 +642,7 @@ class MapsActivity : AppCompatActivity(),
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latlng, 15f))
         }
         lastLocation = location
-        val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -597,7 +650,7 @@ class MapsActivity : AppCompatActivity(),
         ) {
             return
         }
-        val cellInfoAry = tm.allCellInfo
+        val cellInfoAry = telephonyManager.allCellInfo
         onDataEvent(cellInfoAry, location)
     }
 
@@ -966,13 +1019,16 @@ class MapsActivity : AppCompatActivity(),
             alertDialogBuilder.setNegativeButton("Cancel", null)
         } else {
             alertDialogBuilder.setPositiveButton(okBtnLabel) { dialog, which ->
-                requestPermission()
+                when (permission) {
+                    Manifest.permission.ACCESS_FINE_LOCATION -> requestPermissionAccessLocation()
+                    Manifest.permission.READ_PHONE_STATE -> requestPermissionReadPhoneState()
+                }
             }
         }
         alertDialogBuilder.show()
     }
 
-    private fun requestPermission() {
+    private fun requestPermissionAccessLocation() {
         var permissionArray = arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
@@ -986,6 +1042,13 @@ class MapsActivity : AppCompatActivity(),
         requestPermissionLauncher.launch(permissionArray)
     }
 
+    private fun requestPermissionReadPhoneState() {
+        var permissionArray = arrayOf(
+            Manifest.permission.READ_PHONE_STATE
+        )
+        requestPermissionLauncher.launch(permissionArray)
+    }
+
     // mMap.isMyLocationEnabled の、権限考慮版
     private fun setMyLocationEnabled() {
         if (!checkPermission(true)) {
@@ -995,8 +1058,7 @@ class MapsActivity : AppCompatActivity(),
         mMap.isMyLocationEnabled = true
 
         // 権限が必要なので、ここでやる。
-        val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-        tm.listen(phoneStateListener, PhoneStateListener.LISTEN_CELL_INFO or PhoneStateListener.LISTEN_SIGNAL_STRENGTHS)
+        telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CELL_INFO or PhoneStateListener.LISTEN_SIGNAL_STRENGTHS)
     }
 
     // 青ポチを表示する/しない
