@@ -2,6 +2,7 @@ package jp.tech4u.searchrktncell
 
 import android.graphics.*
 import android.location.Location
+import android.util.Log
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
@@ -9,23 +10,19 @@ import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.LogVO
+import jp.tech4u.searchrktncell.util.Utils
 import java.io.File
 import java.io.FileOutputStream
-import java.lang.Exception
-import kotlin.math.max
-import kotlin.math.min
 
-class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
+class RecordManager {
 
     companion object {
+        private const val TAG = "RecordManager"
         private const val PLOT_DISTANCE_EQ = 10f
         private const val PLOT_DISTANCE_NE = 50f
     }
 
-    private var mMap = mMap
-    private var myMapManager = myMapManager
-
-    var logList = mutableListOf<LogVO>()
+    private var logList = mutableListOf<LogVO>()
     private var markerList = mutableListOf<Marker>()
     private var lLogVo = LogVO()
     private var nowCi = CellId(0)
@@ -35,31 +32,7 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
     private val distanceResult = FloatArray(3)
 
     fun readLog(file: File) {
-        if (!file.exists()) {
-            println("logfile not found: ${file.path}")
-            return
-        }
-        file.bufferedReader().forEachLine {
-            try {
-                val rows = it.split(',')
-                val logVO = LogVO(
-                    rows[0].toInt(),
-                    rows[1].toDouble(),
-                    rows[2].toDouble(),
-                    rows[3],
-                    rows[4],
-                    rows[5].toInt(),
-                    rows[6].toLong(),
-                    rows[7].toInt(),
-                    rows[8].toInt(),
-                    rows[9].toInt(),
-                )
-                logList.add(logVO)
-            } catch (e: Exception) {
-                println(e)
-                // 握りつぶすｗ
-            }
-        }
+        Utils.readLog(file, logList)
     }
 
     fun clearMarkers() {
@@ -69,17 +42,27 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
         markerList.clear()
     }
 
+    fun rePlot(mMap: GoogleMap) {
+        if (logList.count() == 0) {
+            return
+        }
+        clearMarkers()
+        val bPlotPartner = Utils.getPreferenceBoolean("plotPartner", false)
+        val bPlotMyMapCell = Utils.getPreferenceBoolean("plotMyMapCell", true)
+        plotAll(mMap, CellId(logList.last().ci), bPlotPartner, bPlotMyMapCell)
+    }
+
     // プロットするかの判定
     // MyMap登録済みかの判定。パートナーエリアは無関係
     private fun needPlotM(logVO: LogVO, bPlotMyMapCell: Boolean): Boolean {
         if (bPlotMyMapCell) return true    // 設定で全プロットすることになってる
-
-        val name = myMapManager.getName(logVO.ci)
+        val app = MyApplication.getInstance()
+        val name = app.myMapManager.getName(logVO.ci)
         if (name == "") return true // マイマップになし→プロットする。
         return name.endsWith('？')  // マイマップ上の名前の最後が？ならプロットする。そうでなければしない。
     }
 
-    fun plotAll(ci: CellId, bPlotPartner: Boolean, bPlotMyMapCell: Boolean) {
+    fun plotAll(mMap: GoogleMap, ci: CellId, bPlotPartner: Boolean, bPlotMyMapCell: Boolean) {
         nowCi = ci
 
         for (logVO in logList) {
@@ -87,27 +70,27 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
                 if (needPlotM(logVO, bPlotMyMapCell)) {
                     val lci = CellId(logVO.ci)
                     val bEqualBs = nowCi.equalBs(lci)
-                    plot(logVO, lci, bEqualBs)
+                    plot(mMap, logVO, lci, bEqualBs)
                 }
             }
         }
     }
 
-    fun plotAndLog(logVO: LogVO, bPlotPartner: Boolean, bPlotMyMapCell: Boolean) {
+    fun plotAndLog(mMap: GoogleMap, logVO: LogVO, bPlotPartner: Boolean, bPlotMyMapCell: Boolean) {
         val ci = CellId(logVO.ci)
         val bEqualBs = nowCi.equalBs(ci)
 
         if (bEqualBs) {
             if (bPlotPartner || logVO.mncString == "11") {
-                if (needPlotM(logVO, bPlotMyMapCell)){
-                    plot(logVO, ci, bEqualBs)
+                if (needPlotM(logVO, bPlotMyMapCell)) {
+                    plot(mMap, logVO, ci, bEqualBs)
                 }
                 logList.add(logVO)
             }
         } else {
             clearMarkers()
             logList.add(logVO)
-            plotAll(ci, bPlotPartner, bPlotMyMapCell)
+            plotAll(mMap, ci, bPlotPartner, bPlotMyMapCell)
         }
     }
 
@@ -126,7 +109,7 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
             }
             // 書き出した分をクリア
             csvList.clear()
-            println("csv保存しました")
+            Log.i(TAG, "csv保存しました")
         }
 
     }
@@ -149,16 +132,16 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
     }
 
     // プロットする。但し、前回と近い場合はプロットしない。
-    private fun plot(logVO: LogVO, ci: CellId, bEqualBs: Boolean) {
+    private fun plot(mMap: GoogleMap, logVO: LogVO, ci: CellId, bEqualBs: Boolean) {
         val bPlot = needPlot(logVO, bEqualBs)
         if (bPlot) {
             lLogVo = logVO.copy()
-            plotImpl(logVO, ci, bEqualBs)
+            plotImpl(mMap, logVO, ci, bEqualBs)
         }
     }
 
     // プロットする。実装部。
-    private fun plotImpl(logVO: LogVO, ci: CellId, bEqualBs: Boolean) {
+    private fun plotImpl(mMap: GoogleMap, logVO: LogVO, ci: CellId, bEqualBs: Boolean) {
         val latlng = LatLng(logVO.lat, logVO.lng)
 
         val icon = BitmapDescriptorFactory.fromBitmap(createBitmap(logVO.rsrp, ci.sector3, logVO.ta, bEqualBs))
@@ -170,9 +153,17 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
             .title(title)
             .snippet("RSRP:${logVO.rsrp}")
             .icon(icon)
+            .alpha(0.8f)
             .zIndex((if (bEqualBs) 3999f else 1999f) - logVO.ta)
         val marker: Marker = mMap.addMarker(markerOptions)
         markerList.add(marker)
+    }
+
+    private fun calcColor(rsrp: Int, sector3: Int, bEqualBs: Boolean): Int {
+        val h = (sector3 % 3) * 120f // 色相。セクタ順に RGBになるようにしてます
+        val s = Utils.arduinoMapLimit(rsrp, -98, -50, 16, 255) / 255f // 彩度。RSRP比例
+        val v = if (bEqualBs) 1f else 0.6f  // 明度。別基地局は暗く。
+        return Color.HSVToColor(floatArrayOf(h, s, v))
     }
 
     // マーカーに使うビットマップを生成
@@ -180,13 +171,9 @@ class RecordManager(mMap: GoogleMap, myMapManager:MyMapManager) {
         val size = 48
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val h = ((sector3 + 0) % 3) * 120f // セクタ順に RGBになるようにしてます
-        val s = max(0.02f, min(1f, 1 + (rsrp + 60) / 30f))
-        val v = if (bEqualBs) 1f else 0.6f
-        val color = Color.HSVToColor(floatArrayOf(h, s, v))
         val paint = Paint()
         paint.isAntiAlias = true
-        paint.color = color
+        paint.color = calcColor(rsrp, sector3, bEqualBs)
 
         // taに応じた点を描画
         when (ta) {

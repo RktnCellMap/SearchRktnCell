@@ -84,6 +84,15 @@
             app:isPreferenceVisible="false"
     />
 
+    <DropDownPreference
+            app:key="dbmBarDesign"
+            app:title="バーグラフのデザイン"
+            app:entries="@array/dbmBarDesignEntries"
+            app:entryValues="@array/dbmBarDesignValues"
+            android:defaultValue="default"
+            app:useSimpleSummaryProvider="true"
+    />
+
     <Preference
             app:key="version"
             app:title="@string/version_title"

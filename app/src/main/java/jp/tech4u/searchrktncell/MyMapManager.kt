@@ -1,13 +1,12 @@
 package jp.tech4u.searchrktncell
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.*
+import jp.tech4u.searchrktncell.data.LogVO
 import jp.tech4u.searchrktncell.util.MyException
 import jp.tech4u.searchrktncell.util.Utils
 import jp.tech4u.searchrktncell.util.ZipUtil
@@ -16,8 +15,11 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
-class MyMapManager() {
-    private lateinit var mMap: GoogleMap
+class MyMapManager {
+    companion object {
+        private const val TAG = "MyMapManager"
+    }
+
     private var kmlParser = KmlParser()
 
     private var markerList = mutableListOf<Marker>()
@@ -27,21 +29,19 @@ class MyMapManager() {
     private var locLine: Polyline? = null    // 基地局-現在地の線
     var myMapLL: LatLng? = null           // 掴んでいる基地局の位置
 
-    fun init(map: GoogleMap) {
-        mMap = map
-    }
-
     fun readMyMap(mid: String, cacheFile: File, bReload: Boolean) {
         val cutOff: Long = System.currentTimeMillis() - 60 * 60 * 1000
         if (bReload || !cacheFile.exists() || cacheFile.lastModified() < cutOff) {
             // 明示的なリロード、キャッシュが存在しない、古い場合　はサーバーから取得
-            println("ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMapダウンロード開始します")
+            Log.i(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMapダウンロード開始します")
             val urlString = "https://www.google.com/maps/d/kml?mid=$mid"
             val con = Utils.getHttpURLConnectionFromUrlString(urlString)
             var inputStream: InputStream? = null
             try {
                 inputStream = con.inputStream
-            } catch (e: IOException ) {
+            } catch (e: IOException) {
+                markerList.clear()
+                eciMap.clear()
                 when (con.responseCode) {
                     403 -> throw MyException("マイマップが非公開です")
                     404 -> throw MyException("マイマップが見つかりません")
@@ -51,7 +51,7 @@ class MyMapManager() {
             }
             if (inputStream != null) {
                 Utils.saveFromInputStream(inputStream, cacheFile)
-                println("ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMapダウンロードし、キャッシュを保存しますた")
+                Log.i(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMapダウンロードし、キャッシュを保存しますた")
             }
         }
 
@@ -62,11 +62,12 @@ class MyMapManager() {
 
     // KML解析（裏スレッド）
     private fun parseMyMap(cacheFile: File) {
-        println("ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込み開始します")
+        Log.i(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込み開始します")
 
         eciMap.clear()
 
         val name = cacheFile.nameWithoutExtension
+
         @Suppress("RECEIVER_NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
         val parent: String = cacheFile.parent.toString()
         extDir = Paths.get(parent, name)
@@ -77,11 +78,11 @@ class MyMapManager() {
             kmlParser.parse(Files.newInputStream(kmlFilePath))
             createEciMap()
         } catch (e: Exception) {
-            println("ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込み失敗しました")
-            println(e)
+            Log.w(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込み失敗しました")
+            Log.w(TAG, e.toString())
+            return
         }
-        println("ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込みました")
-
+        Log.i(TAG, "ＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸＸMyMap読み込みました")
     }
 
     // kmlParser.placemarks から eciMap を作る
@@ -93,7 +94,7 @@ class MyMapManager() {
         }
     }
 
-    fun plotPlacemark() {
+    fun plotPlacemark(mMap: GoogleMap) {
         // 既存マーカークリア
         for (marker in markerList) {
             marker.remove()
@@ -102,19 +103,19 @@ class MyMapManager() {
 
         // マーカープロット
         for (placemark in kmlParser.placemarks) {
-            plotImpl(placemark)
+            plotImpl(placemark, mMap)
         }
     }
 
     // プロットする。実装部。
-    private fun plotImpl(placemark: KmlParser.Placemark) {
+    private fun plotImpl(placemark: KmlParser.Placemark, mMap: GoogleMap) {
         val kmlStyle = kmlParser.kmlStyleMap[placemark.styleUrl]
-        var markerOptions =
+        val markerOptions =
             MarkerOptions()
                 .position(placemark.ll)
                 .title(placemark.name)
                 .zIndex(4000f)
-        if (placemark.snippet != "" ) markerOptions.snippet(placemark.snippet )
+        if (placemark.snippet != "") markerOptions.snippet(placemark.snippet)
 
         if (kmlStyle?.href != null) {
             if (!kmlStyle.href!!.startsWith("http://") && !kmlStyle.href!!.startsWith("https://")) {
@@ -140,21 +141,23 @@ class MyMapManager() {
         return BitmapFactory.decodeFile(path)
     }
 
-    fun drawLine(latlng: LatLng, cellid: Long, mMap: GoogleMap): Boolean {
+    // 線を描いたら true を返す
+    fun drawLine(latlng: LatLng, logVO: LogVO, mMap: GoogleMap): Boolean {
 
         locLine?.remove()
         locLine = null
 
-        if (eciMap.containsKey(cellid)) {
-            val placemark = eciMap[cellid]!!
-            myMapLL = placemark.ll  // nullの場合もあり、かも。無いと思うけど。
-        }
-        else {
-            myMapLL = null
+        if (logVO.mncString != "11") return false
+
+        myMapLL = if (eciMap.containsKey(logVO.ci)) {
+            val placemark = eciMap[logVO.ci]!!
+            placemark.ll  // nullの場合もあり、かも。無いと思うけど。
+        } else {
+            null
         }
 
         if (myMapLL != null) {
-            val context = MapsActivity.getInstance()
+            val context = MyApplication.getInstance()
             locLine = mMap.addPolyline(
                 PolylineOptions()
                     .add(latlng, myMapLL)
@@ -165,24 +168,12 @@ class MyMapManager() {
         return false
     }
 
-    fun getName(cellid: Long) : String {
+    fun getName(cellid: Long): String {
         return if (eciMap.containsKey(cellid)) {
             val placemark = eciMap[cellid]!!
             placemark.name
         } else {
             ""
-        }
-    }
-
-    private inner class PowerConnectionReceiver : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            /*
-            if (intent.action == Intent.ACTION_POWER_CONNECTED) {
-                Toast.makeText(context, "ケーブルを接続した", Toast.LENGTH_LONG).show()
-            } else if (intent.action == Intent.ACTION_POWER_DISCONNECTED) {
-                Toast.makeText(context, "ケーブルを抜いた", Toast.LENGTH_LONG).show()
-            }
-             */
         }
     }
 }

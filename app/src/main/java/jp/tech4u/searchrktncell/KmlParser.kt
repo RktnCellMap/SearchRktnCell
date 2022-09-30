@@ -85,13 +85,13 @@ class KmlParser {
         parser.require(XmlPullParser.END_TAG, ns, "Document")
     }
 
-    private fun createKmlStyle(): KmlParser.KmlStyle {
+    private fun createKmlStyle(): KmlStyle {
         return KmlStyle(null, null, null, null, null, null)
     }
 
     @Throws(XmlPullParserException::class, IOException::class)
     private fun readStyle(parser: XmlPullParser) {
-        var kmlStyle = createKmlStyle()
+        val kmlStyle = createKmlStyle()
         parser.require(XmlPullParser.START_TAG, ns, "Style")
         val id = parser.getAttributeValue(null, "id")
         while (parser.next() != XmlPullParser.END_TAG) {
@@ -317,7 +317,7 @@ class KmlParser {
 
     @Throws(IOException::class, XmlPullParserException::class)
     private fun readChildTag(parser: XmlPullParser, tag: String): String {
-        var value: String = ""
+        var value = ""
         while (parser.next() != XmlPullParser.END_TAG) {
             if (parser.eventType != XmlPullParser.START_TAG) continue
             when (parser.name) {

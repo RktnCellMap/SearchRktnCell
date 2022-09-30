@@ -5,12 +5,22 @@
         <item>充電時のみ常にON</item>
         <item>制御しない</item>
     </string-array>
-
     <!-- 内部KEY -->
     <string-array name="keepScreenOnEntryValues">
         <item>ON</item>
         <item>POWER</item>
         <item>OFF</item>
+    </string-array>
+
+    <!-- 表示用 -->
+    <string-array name="dbmBarDesignEntries">
+        <item>普通</item>
+        <item>色の閾値がわかるやつ</item>
+    </string-array>
+    <!-- 内部KEY -->
+    <string-array name="dbmBarDesignValues">
+        <item>default</item>
+        <item>threshold</item>
     </string-array>
 
 </resources>

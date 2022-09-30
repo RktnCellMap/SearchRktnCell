@@ -42,7 +42,7 @@ class ZipUtil {
                     if (zipEntry!!.isDirectory) {
                         Files.createDirectories(dst)
                     } else {
-                        // System.err.println("inflating: $dst")
+                        // System.err.Log.i(TAG, "inflating: $dst")
                         Files.createDirectories(dst.parent)
 
                         var totalFileReads = 0L

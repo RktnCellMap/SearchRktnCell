@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
+import jp.tech4u.searchrktncell.DebugCellInfo
 import jp.tech4u.searchrktncell.MapsActivity
 import jp.tech4u.searchrktncell.R
 
@@ -29,7 +30,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         return try {
             // アプリケーションパッケージの情報を取得
             val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_META_DATA)
-            val d =  if (MapsActivity.DEBUG_TRACE_LOG) "-DEBUG" else ""
+            val d =  if (DebugCellInfo.DEBUG_CELL_INFO_ENABLE) "-DEBUG" else ""
 
             // バージョン番号の文字列を返す
             info.versionName + d

@@ -2,16 +2,25 @@ package jp.tech4u.searchrktncell
 
 import android.content.Context
 import android.graphics.*
+import android.os.Build
+import android.telephony.*
 import android.text.TextPaint
 import android.util.AttributeSet
+import android.util.Log
 import android.view.View
 import androidx.core.content.ContextCompat
+import jp.tech4u.searchrktncell.data.CellInfoViewVO
+import jp.tech4u.searchrktncell.util.Utils
+import jp.tech4u.searchrktncell.util.bandwidth
+import jp.tech4u.searchrktncell.util.mccString
+import jp.tech4u.searchrktncell.util.mncString
 import kotlin.math.max
 import kotlin.math.min
 
 class CellInfoView : View {
 
     companion object {
+        private const val TAG = "CellInfoView"
         private const val RSRP_MAX = -50
         private const val RSRP_MIN = -140
     }
@@ -132,11 +141,19 @@ class CellInfoView : View {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        println("CellInfoView.onDraw()")
+        Log.d(TAG, "CellInfoView.onDraw()")
 
         calcCoordinates()
         drawBar(canvas)
         drawText(canvas)
+    }
+
+    private fun darkColor(color:Int) : Int {
+        val hsv = floatArrayOf(0f, 0f, 0f)
+        Color.colorToHSV(color, hsv)
+        hsv[1] = hsv[1] / 2 // 彩度を落とす
+        hsv[2] = hsv[2] / 2 // 暗くする
+        return Color.HSVToColor(hsv)
     }
 
     private fun drawBar(canvas: Canvas) {
@@ -152,18 +169,81 @@ class CellInfoView : View {
             barPaint.color = Color.DKGRAY
             canvas.drawRect(barPadRect, barPaint)
 
-            // バー背景
-            barPaint.color = Color.LTGRAY
-            canvas.drawRect(barRect, barPaint)
+            when (Utils.getPreferenceString("dbmBarDesign", "default") ) {
+                "default" -> {
+                    // バー背景
+                    barPaint.color = Color.LTGRAY
+                    canvas.drawRect(barRect, barPaint)
 
-            // バー
-            barPaint.color = when {
-                (-98 <= rsrp) -> ContextCompat.getColor(context, R.color.colorSignal1) // 強：緑
-                (-108 <= rsrp) -> ContextCompat.getColor(context, R.color.colorSignal2)    // 中：黄
-                (-118 <= rsrp) -> ContextCompat.getColor(context, R.color.colorSignal3)    // 弱：オレンジ
-                else -> ContextCompat.getColor(context, R.color.colorSignal4)  // ぴえん：赤
+                    // バー
+                    barPaint.color = when {
+                        (-98 <= rsrp) -> ContextCompat.getColor(context, R.color.colorSignal1) // 強：緑
+                        (-108 <= rsrp) -> ContextCompat.getColor(context, R.color.colorSignal2)    // 中：黄
+                        (-118 <= rsrp) -> ContextCompat.getColor(context, R.color.colorSignal3)    // 弱：オレンジ
+                        else -> ContextCompat.getColor(context, R.color.colorSignal4)  // ぴえん：赤
+                    }
+                    canvas.drawRect(barRect.left, barRect.top, barX, barRect.bottom, barPaint)
+                }
+                else -> {
+                    val barX43 =
+                        barRect.left + (-118 - RSRP_MIN).toFloat() / (RSRP_MAX - RSRP_MIN) * (barRect.right - barRect.left)
+                    val barX32 =
+                        barRect.left + (-108 - RSRP_MIN).toFloat() / (RSRP_MAX - RSRP_MIN) * (barRect.right - barRect.left)
+                    val barX21 =
+                        barRect.left + (-98 - RSRP_MIN).toFloat() / (RSRP_MAX - RSRP_MIN) * (barRect.right - barRect.left)
+
+                    when {
+                        (-98 <= rsrp) -> {
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal4))
+                            canvas.drawRect(barRect.left, barRect.top, barX43, barRect.bottom, barPaint)
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal3))
+                            canvas.drawRect(barX43, barRect.top, barX32, barRect.bottom, barPaint)
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal2))
+                            canvas.drawRect(barX32, barRect.top, barX21, barRect.bottom, barPaint)
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal1))
+                            canvas.drawRect(barX21, barRect.top, barX, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal1))
+                            canvas.drawRect(barX, barRect.top, barRect.right, barRect.bottom, barPaint)
+                        }
+                        (-108 <= rsrp) -> {
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal4))
+                            canvas.drawRect(barRect.left, barRect.top, barX43, barRect.bottom, barPaint)
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal3))
+                            canvas.drawRect(barX43, barRect.top, barX32, barRect.bottom, barPaint)
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal2))
+                            canvas.drawRect(barX32, barRect.top, barX, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal2))
+                            canvas.drawRect(barX, barRect.top, barX21, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal1))
+                            canvas.drawRect(barX21, barRect.top, barRect.right, barRect.bottom, barPaint)
+                        }
+                        (-118 <= rsrp) -> {
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal4))
+                            canvas.drawRect(barRect.left, barRect.top, barX43, barRect.bottom, barPaint)
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal3))
+                            canvas.drawRect(barX43, barRect.top, barX, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal3))
+                            canvas.drawRect(barX, barRect.top, barX32, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal2))
+                            canvas.drawRect(barX32, barRect.top, barX21, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal1))
+                            canvas.drawRect(barX21, barRect.top, barRect.right, barRect.bottom, barPaint)
+                        }
+                        else -> {
+                            barPaint.color = (ContextCompat.getColor(context, R.color.colorSignal4))
+                            canvas.drawRect(barRect.left, barRect.top, barX, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal4))
+                            canvas.drawRect(barX, barRect.top, barX43, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal3))
+                            canvas.drawRect(barX43, barRect.top, barX32, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal2))
+                            canvas.drawRect(barX32, barRect.top, barX21, barRect.bottom, barPaint)
+                            barPaint.color = darkColor(ContextCompat.getColor(context, R.color.colorSignal1))
+                            canvas.drawRect(barX21, barRect.top, barRect.right, barRect.bottom, barPaint)
+                        }
+                    }
+                }
             }
-            canvas.drawRect(barRect.left, barRect.top, barX, barRect.bottom, barPaint)
 
             // バーの中の RSRP値テキスト
             textBarPaint.textSize = barRect.bottom - barRect.top
@@ -227,5 +307,144 @@ class CellInfoView : View {
                 textPaintR
             )
         }
+    }
+
+    //// 外部から扱いやすいようにするメソッド群 ////
+
+    // 通常のデータ反映
+    fun drawCellInfoView(cellInfo: CellInfo?) {
+        if ( cellInfo == null ) {
+            drawCellInfoViewOutOfService()
+        }
+
+        if (cellInfo is CellInfoLte) {
+            // 4G
+            drawCellInfoView(cellInfo)
+        } else if (29 <= Build.VERSION.SDK_INT && cellInfo is CellInfoNr) {
+            // 5G
+            drawCellInfoView(cellInfo as CellInfoNr)
+        } else if (cellInfo is CellInfoWcdma) {
+            // 3G
+            drawCellInfoView(cellInfo)
+        }
+    }
+
+    // 3G
+    private fun drawCellInfoView(cellInfo: CellInfoWcdma?) {
+        val vo = if (cellInfo != null) {
+            val ci = cellInfo.cellIdentity
+            val css = cellInfo.cellSignalStrength
+            val rnc = ci.cid ushr 16
+            val cid = ci.cid and 65535
+
+            val rsrp = if (css.dbm != CellInfo.UNAVAILABLE) css.dbm else null
+            val bgColor = Utils.getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+
+            CellInfoViewVO(
+                rsrp,
+                "LAC-UCID: ${ci.lac}-${ci.cid}",
+                "RNC-CID: ${rnc}-${cid}",
+                "",
+                bgColor
+            )
+        } else {
+            CellInfoViewVO(
+                null,
+                "LAC-UCID: -",
+                "RNC-CID:  -",
+                "",
+                null
+            )
+        }
+        drawCellInfoView(vo)
+    }
+
+    // 4G
+    private fun drawCellInfoView(cellInfo: CellInfoLte?) {
+        if (cellInfo != null) {
+            val cid = cellInfo.cellIdentity
+            val css = cellInfo.cellSignalStrength
+            val enb = cid.ci ushr 8
+            val lcid = cid.ci and 255
+            val bw = cellInfo.bandwidth
+
+            val bwStr = if (bw != CellInfo.UNAVAILABLE) {
+                (bw / 1000).toString() + "MHz"
+            } else {
+                "-"
+            }
+            val ta =
+                if (css.timingAdvance != CellInfo.UNAVAILABLE) css.timingAdvance.toString() else "-"
+
+            val rsrp = if (css.rsrp != CellInfo.UNAVAILABLE) css.rsrp else null
+            val bgColor = Utils.getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+            val vo = CellInfoViewVO(
+                rsrp,
+                "eNB-LCID: ${enb}-${lcid}",
+                "PCI: ${cid.pci}  BW: $bwStr",
+                "TA: $ta",
+                bgColor
+            )
+            drawCellInfoView(vo)
+        } else {
+            drawCellInfoViewOutOfService()
+        }
+    }
+
+    // 5G
+    private fun drawCellInfoView(cellInfo: CellInfoNr?) {
+        val vo = if (cellInfo != null) {
+            val cid = cellInfo.cellIdentity as CellIdentityNr
+            val css = cellInfo.cellSignalStrength as CellSignalStrengthNr
+            val bw = cellInfo.bandwidth
+
+            val bwStr = if (bw != CellInfo.UNAVAILABLE) {
+                (bw / 1000).toString() + "MHz"
+            } else {
+                "-"
+            }
+            val ta = "-"
+
+            val rsrp = if (css.csiRsrp != CellInfo.UNAVAILABLE) css.csiRsrp else null
+            val bgColor = Utils.getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+            CellInfoViewVO(
+                rsrp,
+                "NCI: ${cid.nci}",
+                "PCI: ${cid.pci}  BW: $bwStr",
+                "TA: $ta",
+                bgColor
+            )
+        } else {
+            CellInfoViewVO(
+                null,
+                "NCI: -",
+                "PCI: -  BW: -",
+                "TA: -",
+                null
+            )
+        }
+        drawCellInfoView(vo)
+    }
+
+    // 圏外
+    private fun drawCellInfoViewOutOfService() {
+        val vo = CellInfoViewVO(
+            null,
+            "eNB-LCID: -",
+            "PCI: -  BW: -",
+            "TA: -",
+            ContextCompat.getColor(context, R.color.colorForeign)
+        )
+        drawCellInfoView(vo)
+    }
+
+    // 用意されたデータをそのまま反映
+    fun drawCellInfoView(vo: CellInfoViewVO) {
+        vo.bgColor?.let { setBackgroundColor(it) }
+        cellRsrp = vo.rsrp
+        stringL1 = vo.l1
+        stringL2 = vo.l2
+        stringR = vo.r
+        invalidate()
     }
 }
