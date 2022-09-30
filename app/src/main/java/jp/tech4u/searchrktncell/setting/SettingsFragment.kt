@@ -2,6 +2,7 @@ package jp.tech4u.searchrktncell.setting
 
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -13,11 +14,9 @@ import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
-import jp.tech4u.searchrktncell.DebugCellInfo
-import jp.tech4u.searchrktncell.MapsActivity
-import jp.tech4u.searchrktncell.MyApplication
-import jp.tech4u.searchrktncell.R
+import jp.tech4u.searchrktncell.*
 import jp.tech4u.searchrktncell.util.Utils
+
 
 class SettingsFragment : PreferenceFragmentCompat() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {

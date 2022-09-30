@@ -33,15 +33,15 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.toBitmap
 import com.github.pengrad.mapscaleview.MapScaleView
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.android.gms.maps.model.*
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
 import jp.tech4u.searchrktncell.data.LogVO
@@ -53,14 +53,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParserException
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.*
+import kotlin.math.floor
 
 
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
+    GoogleMap.OnMapLongClickListener,
     PopupMenu.OnMenuItemClickListener,
     GoogleMap.OnCameraMoveStartedListener,
     GoogleMap.OnCameraIdleListener,
@@ -109,6 +108,7 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var txtCellInfoTac: TextView
     private lateinit var txtCellInfoPci: TextView
     private lateinit var txtLatLng: TextView
+    private lateinit var txtDestination: TextView
     private lateinit var txtDebug: TextView
     private lateinit var scaleView: MapScaleView
 
@@ -151,6 +151,10 @@ class MapsActivity : AppCompatActivity(),
     // カメラアニメーションの時間[ms]
     private var cameraMoveDurationMs = 300
 
+    private var destinationMarker: Marker? = null   // 簡易ナビの目的地。nullでなければナビが有効
+    private var destinationLine: Polyline? = null
+    private val distanceResult = FloatArray(3)
+
     // デバッグ用
     private var bPress = false
 
@@ -168,6 +172,7 @@ class MapsActivity : AppCompatActivity(),
         txtCellInfoTac = findViewById(R.id.txtCellInfoTac)
         txtCellInfoPci = findViewById(R.id.txtCellInfoPci)
         txtLatLng = findViewById(R.id.txtLatLng)
+        txtDestination = findViewById(R.id.txtDestination)
         txtDebug = findViewById(R.id.txtDebug)
         // txtDebug.visibility = View.VISIBLE   // デバッグ用
         scaleView = findViewById(R.id.scaleView)
@@ -317,9 +322,28 @@ class MapsActivity : AppCompatActivity(),
 
         val density = resources.displayMetrics.density
         mMap.setPadding(0, (34 * density).toInt(), 0, (34 * density).toInt())
+        mMap.setOnMapLongClickListener(this)
         mMap.setOnCameraMoveStartedListener(this)
         mMap.setOnCameraIdleListener(this)
         //mMap.setOnMyLocationButtonClickListener(this)
+
+        mMap.setInfoWindowAdapter(CustomInfoWindowAdapter(this))
+
+        // 簡易ナビ開始
+        val destination = Utils.getPreferenceString("destination", "")
+        if (!destination.isNullOrEmpty()) {
+            try {
+                val ary = destination.split(",")
+                if (ary.size == 2) {
+                    val lat = ary[0].toDouble()
+                    val lng = ary[1].toDouble()
+                    val latLng = LatLng(lat, lng)
+                    startTinyNavigation(latLng, false)
+                }
+            } catch (ex: Exception) {
+                // ここには来ないはず
+            }
+        }
 
         val initLatLng = LatLng(INITIAL_MAP_LAT, INITIAL_MAP_LNG)
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initLatLng, INITIAL_MAP_ZOOM))
@@ -335,6 +359,51 @@ class MapsActivity : AppCompatActivity(),
                 debugTimerHandler.postDelayed(debugTimerRunnable, 5000L)
             }
         }
+    }
+
+    override fun onMapLongClick(latLng: LatLng) {
+        AlertDialog.Builder(this)
+            .setTitle("簡易ナビ機能")
+            .setMessage("この場所を目的地に設定します。")
+            .setNegativeButton("キャンセル", null)
+            .setPositiveButton("ここへ行く") { dialog, which ->
+                startTinyNavigation(latLng)
+            }
+            .show()
+    }
+
+    private fun startTinyNavigation(latLng: LatLng, persistence: Boolean = true) {
+        stopTinyNavigation()
+
+        val markerBitmap = ResourcesCompat.getDrawable(resources, R.drawable.destination, null)?.toBitmap()
+        val markerIcon = BitmapDescriptorFactory.fromBitmap(markerBitmap)
+        val title = "簡易ナビ目的地"
+        //val snippet = "%.6f,%.6f".format(latLng.latitude, latLng.longitude)
+        val markerOptions = MarkerOptions()
+            .position(latLng)
+            .anchor(0.5f, 0.5f)
+            .title(title)
+            //.snippet(snippet)
+            .icon(markerIcon)
+            .alpha(0.8f)
+            .zIndex(5000f)
+        destinationMarker = mMap.addMarker(markerOptions)
+
+        txtDestination.visibility = View.VISIBLE
+
+        if ( persistence ) {
+            val latLngStr = "${latLng.latitude},${latLng.longitude}"
+            Utils.setPreferenceString("destination", latLngStr)
+        }
+    }
+
+    private fun stopTinyNavigation() {
+        destinationLine?.remove()
+        destinationMarker?.remove()
+        destinationLine = null
+        destinationMarker = null
+        txtDestination.visibility = View.INVISIBLE
+        Utils.setPreferenceString("destination", "")
     }
 
     // フラグの類を初期化する（設定から読み込む）
@@ -620,6 +689,32 @@ class MapsActivity : AppCompatActivity(),
             }
         }
 
+        // 簡易ナビ（線を引くだけ）
+        if ( destinationLine != null ) {
+            // 既に引かれていたらとりあえず消す
+            destinationLine?.remove()
+            destinationLine = null
+        }
+        if ( destinationMarker!=null) {
+            val pattern = listOf(
+                Gap(20F), Dash(30F)
+            )
+            val p1 = destinationMarker!!.position
+            destinationLine = mMap.addPolyline(
+                PolylineOptions()
+                    .add(p1, latlng)
+                    .color(ContextCompat.getColor(this, R.color.colorDestinationLine))
+                    .pattern(pattern)
+            )
+            Location.distanceBetween(p1.latitude, p1.longitude, latlng.latitude, latlng.longitude, distanceResult)
+            val distanceStr = if ( distanceResult[0]<1000) {
+                (floor(distanceResult[0] / 10) * 10).toInt().toString()+ "m"
+            } else {
+                (floor(distanceResult[0] / 100) / 10).toString() + "km"
+            }
+            txtDestination.text = "目的地まで $distanceStr"
+        }
+
         displayCellName(lastLogVO)
 
         // 地図表示位置反映
@@ -721,14 +816,17 @@ class MapsActivity : AppCompatActivity(),
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         // マイマップURLが1つでも設定されていたら、マイマップリロードのメニューを活性にする
         val app = MyApplication.getInstance()
-        var bEnable = false
+        var bReloadMyMapEnable = false
         for (key in app.myMapManager.myMapUrlKeys) {
             if (Utils.checkMyMapMid(key)) {
-                bEnable = true
+                bReloadMyMapEnable = true
                 break
             }
         }
-        menu.findItem(R.id.reloadMyMap).isEnabled = bEnable
+        menu.findItem(R.id.reloadMyMap).isEnabled = bReloadMyMapEnable
+
+        // 簡易ナビ終了 のメニュー活性非活性
+        menu.findItem(R.id.removeDestination).isEnabled = this.destinationMarker != null
 
         return true
     }
@@ -740,6 +838,7 @@ class MapsActivity : AppCompatActivity(),
         when (item.itemId) {
             R.id.reloadMls -> scope.launch { readMls(false) }
             R.id.reloadMyMap -> reloadMyMap(true)
+            R.id.removeDestination -> stopTinyNavigation()
             R.id.settings -> startActivity(Intent(this@MapsActivity, SettingsActivity::class.java))
             R.id.myMapList -> openUrl("https://cellmap.rukihena.com/mymaplist.html")
             R.id.appPage -> openUrl("https://cellmap.rukihena.com/SearchRktnCell/")

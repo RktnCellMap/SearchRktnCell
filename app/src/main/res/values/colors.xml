@@ -18,6 +18,7 @@
     <color name="colorTaText">#000000</color>
 
     <color name="colorCurrToCellLine">#C00000FF</color>
+    <color name="colorDestinationLine">#FF008C</color>
 
     <color name="colorMlsStroke">#80FF008C</color>
     <color name="colorMlsFill">#40FF008C</color>

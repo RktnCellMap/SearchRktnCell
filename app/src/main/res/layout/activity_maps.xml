@@ -103,6 +103,21 @@
                 android:visibility="invisible"
         />
         <TextView
+                android:id="@+id/txtDestination"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="40dp"
+                android:layout_alignParentBottom="true"
+                android:paddingVertical="2dp"
+                android:paddingHorizontal="8dp"
+                android:textSize="16dp"
+                android:gravity="center_horizontal"
+                android:layout_centerHorizontal="true"
+                android:background="@color/colorMapObjBg"
+                android:textColor="@color/colorMapObjFg"
+                android:visibility="invisible"
+        />
+        <TextView
                 android:id="@+id/txtLatLng"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

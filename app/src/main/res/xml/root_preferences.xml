@@ -162,7 +162,7 @@
             app:title="マイマップで認識した基地局の軌跡"
             android:summaryOn="プロットする"
             android:summaryOff="プロットしない"
-            android:defaultValue="true"
+            android:defaultValue="false"
     />
 
     <SwitchPreference
@@ -225,5 +225,10 @@
             app:title="バージョン"
             app:summary="x.x.x"
     />
-
+    <Preference
+            app:key="destination"
+            app:title="目的地(lat,lan)"
+            app:summary="データ保存用です"
+            app:isPreferenceVisible="false"
+    />
 </PreferenceScreen>

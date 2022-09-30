@@ -40,9 +40,8 @@ class MyApplication : Application() {
         setDefaultNightModeByPreference()
     }
 
-    fun setDefaultNightModeByPreference()
-    {
-        val theme =Utils.getPreferenceString("theme", "MODE_NIGHT_FOLLOW_SYSTEM")
+    fun setDefaultNightModeByPreference() {
+        val theme = Utils.getPreferenceString("theme", "MODE_NIGHT_FOLLOW_SYSTEM")
         Log.e("MyApplication", "setDefaultNightModeByPreference() $theme")
         when (theme) {
             "MODE_NIGHT_YES" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)

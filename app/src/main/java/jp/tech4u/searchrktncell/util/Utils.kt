@@ -282,6 +282,14 @@ object Utils {
         return sharedPreferences.getString(key, default)
     }
 
+    fun setPreferenceString(key: String, value: String) {
+        val context = MyApplication.getInstance()
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        sharedPreferences.edit()
+            .putString(key, value)
+            .commit()
+    }
+
     fun getPreferenceInt(key: String, default: Int): Int {
         val context = MyApplication.getInstance()
         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)

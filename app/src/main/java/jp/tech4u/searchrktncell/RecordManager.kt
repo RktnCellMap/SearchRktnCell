@@ -185,6 +185,7 @@ class RecordManager {
             .alpha(0.8f)
             .zIndex((if (bEqualBs) 3999f else 1999f) - taForZ)
         val marker: Marker = mMap.addMarker(markerOptions)
+        marker.tag = logVO
         markerList.add(marker)
     }
 

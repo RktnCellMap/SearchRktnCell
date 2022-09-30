@@ -20,14 +20,15 @@ class DebugCellInfo {
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210209_qurune.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210209_qurune_tac.csv"
         //private const val DEBUG_LOAD_LOG_FILENAME = "log_20210907_kiyose.csv"
+        //private const val DEBUG_LOAD_LOG_FILENAME = "log_tokorozawa_ohkawakagu.csv"
         private const val DEBUG_LOAD_LOG_FILENAME = ""    // リリースはコレ
 
-        private const val DEBUG_TRACE_LOG_START_INDEX = 500
+        private const val DEBUG_TRACE_LOG_START_INDEX = 0
 
         //const val DISABLE_RADIO_INFO = true
         const val DISABLE_RADIO_INFO = false    // リリースはコレ
 
-        var INTERVAL_MS = 100L        // 描画間隔[ms]
+        var INTERVAL_MS = 1000L        // 描画間隔[ms]
         private const val DISTANCE = 20f    // プ0ロット間隔[m]
     }
 
