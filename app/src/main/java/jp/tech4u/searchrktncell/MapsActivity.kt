@@ -163,7 +163,6 @@ class MapsActivity : AppCompatActivity(),
     private val accelerometerReadingLpf = FloatArray(3)// 加速度
     private val magnetometerReadingLpf = FloatArray(3) // 地磁気
     private val rotationMatrix = FloatArray(9)      // 加速度と地磁気の合成 または ROTATION_VECTORから変換
-    private val orientationAngles = FloatArray(3)   // 結果としてはコレ
     private var magneticSensorExists = false
     private var prefSensorRotateMillis = 0L
     private var prefAccelerometerMillis = 0L
@@ -1159,10 +1158,13 @@ class MapsActivity : AppCompatActivity(),
         val d = this.windowManager.getDefaultDisplay()
         val dRot = d.rotation * 90  // 画面回転 0,90,180,270度
         val declination = geomagneticField?.declination ?: 0f
-        val magAngle =
-            if (-PI / 2 < orientationAngles[2] && orientationAngles[2] < PI / 2)
-                (orientationAngles[0] * 180 / PI).toFloat()
-            else (orientationAngles[0] * 180 / PI).toFloat() + 180
+
+        // 回転行列から北の向きを取得
+        // 参考 https://qiita.com/rukihena/items/88375f56da46a092208b
+        val rad = atan2(rotationMatrix[2], rotationMatrix[5]) -
+                atan2(rotationMatrix[6], rotationMatrix[7]) + Math.PI
+        // Maps SDK for Android の bearing値に変換
+        val magAngle = Math.toDegrees(rad).toFloat()
         return magAngle - declination + dRot
     }
 
@@ -2004,7 +2006,6 @@ class MapsActivity : AppCompatActivity(),
 
     private fun updateFromRotationMatrix() {
         val mills = System.currentTimeMillis()
-        SensorManager.getOrientation(rotationMatrix, orientationAngles)
         if (bMoveCurrentLocation && lastLocation != null) {
             // 現在地連動モード かつ 位置特定済み
             if (100 < mills - prefSensorRotateMillis) {
