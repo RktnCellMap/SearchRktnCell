@@ -281,8 +281,8 @@ object Utils {
         }
         var mid = ""
         val myMapUrlTrimmed = myMapUrl!!.trim()
-        if (myMapUrlTrimmed.length == 33) {
-            // 33文字の場合はそのまま
+        if (myMapUrlTrimmed.length in 32..33) {
+            // 32~33文字の場合はそのまま
             mid = myMapUrlTrimmed
         } else {
             // それ以外の場合は、URIを解析して引数midを取得
