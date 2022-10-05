@@ -473,7 +473,7 @@ class MapsActivity : AppCompatActivity(),
         // 早めにやるとぬるぽ
         if (DebugCellInfo.DEBUG_CELL_INFO_ENABLE) {
             if (debugCellInfo != null && debugCellInfo!!.isAvailable()) {
-                debugTimerHandler.postDelayed(debugTimerRunnable, 5000L)
+                debugTimerHandler.postDelayed(debugTimerRunnable, DebugCellInfo.INTERVAL_MS)
             }
         }
     }
