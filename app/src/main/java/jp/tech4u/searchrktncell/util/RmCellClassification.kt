@@ -198,6 +198,8 @@ class RmCellClassification {
             R.color.colorIndoorCellBg,    // 屋内局
             R.color.colorFemtoCellBg,    // Casa
             R.color.colorMobileCellBg,    // 移動局
+            R.color.colorMiniMacroCellBg,    // ミニマクロ
+            R.color.colorSatelliteCellBg,    // 衛星局
         )
 
         fun getTacInfo(tac: Int): Pair<String, Int> {
@@ -228,29 +230,33 @@ class RmCellClassification {
             return tacPrefType to type
         }
 
-        val rmEnbTypeNameAry = listOf("マクロセル", "Casa", "屋内局", "ピコセル", )
-        val rmEnbTypeNumAry = listOf(0, 3, 2, 1, )
+        private val rmEnbTypeNameAry = listOf("マクロセル", "Casa", "屋内局", "ピコセル", "移", "ミニマクロ", "衛星局")
+        private val rmEnbTypeNumAry = listOf(0, 3, 2, 1, 4, 5, 6)
 
         fun getEnbInfo(eNB: Long): Pair<String, Int> {
-            var name = ""
-            var type = 0
-
+            var typeNum = 0
             var eNBprefNum = (eNB / 0x4000).toInt()
-            if (eNBprefNum == 62) {
-                name = "移動局"
-                type = 4
+            val name = if (eNBprefNum == 62) {
+                typeNum = 4
+                "移動局"
             } else {
                 // 都道府県
                 if (rmEnbPrefAry.size <= eNBprefNum) eNBprefNum = 0
                 val eNBPref = rmEnbPrefAry[eNBprefNum]
 
                 // セルタイプ
-                val typeNum = ((eNB and 0x3fff) / 5000).toInt()
-                var eNBType = rmEnbTypeNameAry[typeNum]
-
-                name = "$eNBPref,$eNBType"
-                type = rmEnbTypeNumAry[typeNum]
+                val eNBlow14bit = eNB and 0x3fff
+                typeNum = (eNBlow14bit / 5000).toInt()
+                if (typeNum==0 && 4000<=eNBlow14bit) {
+                    typeNum = when {
+                        eNBlow14bit<4600 -> 5
+                        else -> 6
+                    }
+                }
+                val eNBType = rmEnbTypeNameAry[typeNum]
+                "$eNBPref,$eNBType"
             }
+            val type = rmEnbTypeNumAry[typeNum]
             return name to type
         }
 
@@ -258,13 +264,13 @@ class RmCellClassification {
             var pciTypeName = ""
             var pciTypeNum = 0
             when (pci) {
-                in 0..389 -> {
+                in 0..379 -> {
                     pciTypeName = "マクロセル"
                     pciTypeNum = 0
                 }
-                in 390..403 -> {
-                    pciTypeName = "ﾏｸﾛorﾋﾟｺ?"
-                    pciTypeNum = 0
+                in 380..403 -> {
+                    pciTypeName = "ピコセル"
+                    pciTypeNum = 1
                 }
                 in 404..479 -> {
                     pciTypeName = "屋内局"
@@ -298,7 +304,7 @@ class RmCellClassification {
 
                 }
                 else -> {
-                    // ピコ、屋内、Casa、移動
+                    // ピコ、屋内、Casa、移動、ミニマクロ、衛星
                     ContextCompat.getColor(ctx, colorInt)
                 }
             }

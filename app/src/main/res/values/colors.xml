@@ -45,4 +45,6 @@
     <color name="colorIndoorCellBg">#fe6d73</color>
     <color name="colorPicoCellBg">#ffcb77</color>
     <color name="colorMobileCellBg">#47c3b2</color>
+    <color name="colorMiniMacroCellBg">#c093d4</color>
+    <color name="colorSatelliteCellBg">#6633cc</color>
 </resources>
