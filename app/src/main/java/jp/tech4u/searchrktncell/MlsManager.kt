@@ -114,6 +114,8 @@ class MlsManager {
         }
 
         cidMap = lCidMap
+        val app = MyApplication.getInstance()
+        app.lcidView.setMls(cidMap)
         Log.i(TAG, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊格納しました")
         //Toast.makeText(instance, "MLSデータ読み込み成功", Toast.LENGTH_LONG).show()
     }

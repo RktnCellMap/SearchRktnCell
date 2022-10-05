@@ -84,7 +84,7 @@ class RecordManager {
 
             // TODO 結果をキャッシュする
             val app = MyApplication.getInstance()
-            val name = app.myMapManager.getName(logVO.ci, LatLng(logVO.lat, logVO.lng))
+            val (name, dist) = app.myMapManager.getName(logVO.ci, LatLng(logVO.lat, logVO.lng))
             if (name == null || name == "") return true // マイマップになし→プロットする。
             return name.endsWith('？')  // マイマップ上の名前の最後が？ならプロットする。そうでなければしない。
         } else {

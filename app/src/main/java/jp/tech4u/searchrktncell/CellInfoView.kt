@@ -39,6 +39,7 @@ class CellInfoView : View {
     private lateinit var textPaintR: TextPaint
 
     var bPortrait = true
+    var bLarge = false
 
     /**
      * The text to draw
@@ -124,9 +125,15 @@ class CellInfoView : View {
         val padding: Float
         if (bPortrait) {
             // 通常
-            barArea = RectF(0f, 0f, width.toFloat(), height / 2f)
-            padding = barArea.height() * 0.2f
-            textRect = RectF(0f + padding, height / 2f, width - padding, height - padding)
+            if (bLarge) {
+                barArea = RectF(0f, 0f, width.toFloat() * 0.6f, height / 2.8f)
+                padding = barArea.height() * 0.2f
+                textRect = RectF(0f + padding, height / 2.8f, width - padding, height - padding)
+            } else {
+                barArea = RectF(0f, 0f, width.toFloat(), height / 2f)
+                padding = barArea.height() * 0.2f
+                textRect = RectF(0f + padding, height / 2f, width - padding, height - padding)
+            }
         } else {
             // 横長 要修正
             val textWidth = height * 6f
@@ -292,36 +299,73 @@ class CellInfoView : View {
     }
 
     private fun drawText(canvas: Canvas) {
-        val textLeft = textRect.left
-        val textRight = textRect.right
-        val text1Bottom = textRect.top + textRect.height() / 2
-        val text2Bottom = textRect.bottom
-        textPaintL.textSize = textRect.height() / 2
-        textPaintR.textSize = textRect.height()
+        if ( bLarge && bPortrait ) {
+            val textLeft = textRect.left
+            val text1Bottom = textRect.top + textRect.height() / 4
+            val text2Bottom = textRect.top + textRect.height() / 2
+            val text3Bottom = textRect.bottom
+            textPaintL.textSize = textRect.height() / 4
+            textPaintR.textSize = textRect.height() / 2
+            textPaintR.textAlign = Paint.Align.LEFT
 
-        _stringL1?.let {
-            canvas.drawText(
-                it,
-                textLeft,
-                text1Bottom - textPaintL.fontMetrics.bottom / 2,
-                textPaintL
-            )
+            _stringL1?.let {
+                canvas.drawText(
+                    it,
+                    textLeft,
+                    text1Bottom - textPaintL.fontMetrics.bottom / 2,
+                    textPaintL
+                )
+            }
+            _stringL2?.let {
+                canvas.drawText(
+                    it,
+                    textLeft,
+                    text2Bottom - textPaintL.fontMetrics.bottom / 2,
+                    textPaintL
+                )
+            }
+            _stringR?.let {
+                canvas.drawText(
+                    it,
+                    textLeft,
+                    text3Bottom - textPaintR.fontMetrics.bottom / 2,
+                    textPaintR
+                )
+            }
         }
-        _stringL2?.let {
-            canvas.drawText(
-                it,
-                textLeft,
-                text2Bottom - textPaintL.fontMetrics.bottom / 2,
-                textPaintL
-            )
-        }
-        _stringR?.let {
-            canvas.drawText(
-                it,
-                textRight,
-                text2Bottom - textPaintR.fontMetrics.bottom / 2,
-                textPaintR
-            )
+        else {
+            val textLeft = textRect.left
+            val textRight = textRect.right
+            val text1Bottom = textRect.top + textRect.height() / 2
+            val text2Bottom = textRect.bottom
+            textPaintL.textSize = textRect.height() / 2
+            textPaintR.textSize = textRect.height()
+            textPaintR.textAlign = Paint.Align.RIGHT
+
+            _stringL1?.let {
+                canvas.drawText(
+                    it,
+                    textLeft,
+                    text1Bottom - textPaintL.fontMetrics.bottom / 2,
+                    textPaintL
+                )
+            }
+            _stringL2?.let {
+                canvas.drawText(
+                    it,
+                    textLeft,
+                    text2Bottom - textPaintL.fontMetrics.bottom / 2,
+                    textPaintL
+                )
+            }
+            _stringR?.let {
+                canvas.drawText(
+                    it,
+                    textRight,
+                    text2Bottom - textPaintR.fontMetrics.bottom / 2,
+                    textPaintR
+                )
+            }
         }
     }
 

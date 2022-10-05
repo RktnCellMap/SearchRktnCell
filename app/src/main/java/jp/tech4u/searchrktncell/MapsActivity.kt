@@ -115,12 +115,14 @@ class MapsActivity : AppCompatActivity(),
 
     // UI部品
     private lateinit var cellInfoView: CellInfoView
+    private lateinit var lcidView: LcidView
     private lateinit var btnGps: ImageButton
     private lateinit var btnCellFit: ImageButton
     private lateinit var btnLayers: ImageButton
     private lateinit var btnCompass: ImageButton
     private lateinit var btnHeadingUpMode: ImageButton
     private lateinit var imgLocationCenter: ImageView
+    private lateinit var txtCellInfoName: TextView
     private lateinit var txtCellInfoEci: TextView
     private lateinit var txtCellInfoTac: TextView
     private lateinit var txtCellInfoPci: TextView
@@ -230,12 +232,14 @@ class MapsActivity : AppCompatActivity(),
         setContentView(R.layout.activity_maps)
 
         cellInfoView = findViewById(R.id.cellInfoView)
+        lcidView = findViewById(R.id.lcidView)
         btnGps = findViewById(R.id.btnGps)
         btnCellFit = findViewById(R.id.btnCellFit)
         btnLayers = findViewById(R.id.btnLayers)
         btnCompass = findViewById(R.id.btnCompass)
         btnHeadingUpMode = findViewById(R.id.btnHeadingUpMode)
         imgLocationCenter = findViewById(R.id.imgLocationCenter)
+        txtCellInfoName = findViewById(R.id.txtCellInfoName)
         txtCellInfoEci = findViewById(R.id.txtCellInfoEci)
         txtCellInfoTac = findViewById(R.id.txtCellInfoTac)
         txtCellInfoPci = findViewById(R.id.txtCellInfoPci)
@@ -263,6 +267,7 @@ class MapsActivity : AppCompatActivity(),
 
         // Set up a default TextPaint object
         val typeface = Typeface.createFromAsset(this.assets, "Abel-Regular.ttf")
+        txtCellInfoName.typeface = typeface
         txtCellInfoEci.typeface = typeface
         txtCellInfoTac.typeface = typeface
         txtCellInfoPci.typeface = typeface
@@ -293,6 +298,8 @@ class MapsActivity : AppCompatActivity(),
         mapFragment.getMapAsync(this)
 
         val app = MyApplication.getInstance()
+        app.lcidView = lcidView
+
         if (!DebugCellInfo.DISABLE_RADIO_INFO) {
             app.mlsManager.readRadioInfo()
         }
@@ -423,6 +430,7 @@ class MapsActivity : AppCompatActivity(),
 
         changeMapType()
         changeMapLayer()
+        changeViewMode(false)
 
         //mMap.isMyLocationEnabled = true   // ←権限的にそう簡単にいかない・・・
         setMyLocationEnabled()  // 権限考慮版
@@ -623,10 +631,19 @@ class MapsActivity : AppCompatActivity(),
         val density = resources.displayMetrics.density
         val widthDp = cellInfoView.width / density
         cellInfoView.bPortrait = widthDp < 500  // 横画面判定（縦横比ではなく、絶対的な横幅があるかどうかで判断）
+        reCalcCellInfoViewLayout2()
+    }
+
+    private fun reCalcCellInfoViewLayout2() {
+        val density = resources.displayMetrics.density
         cellInfoView.layoutParams.height = when {
-            cellInfoView.bPortrait -> (100 * density).toInt()
+            cellInfoView.bPortrait -> when {
+                cellInfoView.bLarge -> (140 * density).toInt()
+                else -> (100 * density).toInt()
+            }
             else -> (50 * density).toInt()
         }
+        cameraMoveLatLng(mMap.cameraPosition.target)    //レイアウト調整のためのダミー更新
     }
 
 
@@ -637,6 +654,7 @@ class MapsActivity : AppCompatActivity(),
             MotionEvent.ACTION_DOWN -> {
                 Log.i(localClassName, "Action was DOWN")
                 bPress = !bPress
+                changeViewMode(true)
                 true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -938,6 +956,7 @@ class MapsActivity : AppCompatActivity(),
             } else {
                 app.mlsManager.removeMls()
             }
+            lcidView.drawLcid(lastLogVO.ci)
         }
 
         // 簡易ナビ（線を引くだけ）
@@ -982,90 +1001,83 @@ class MapsActivity : AppCompatActivity(),
         if (prevDisplayedCell == logVO?.ci) return
         prevDisplayedCell = logVO?.ci
 
+        txtCellInfoName.text = ""
+        txtCellInfoEci.text = ""
+        txtCellInfoTac.text = ""
+        txtCellInfoPci.text = ""
+        txtCellInfoName.visibility = View.INVISIBLE
+        txtCellInfoEci.visibility = View.INVISIBLE
+        txtCellInfoTac.visibility = View.INVISIBLE
+        txtCellInfoPci.visibility = View.INVISIBLE
+
         val app = MyApplication.getInstance()
+        val ctx = this
 
-        if (!Utils.getPreferenceBoolean("displayCellName", true)) {
-            // 表示しない設定
-            txtCellInfoEci.text = ""
-            txtCellInfoTac.text = ""
-            txtCellInfoPci.text = ""
-            txtCellInfoTac.visibility = View.INVISIBLE
-            txtCellInfoPci.visibility = View.INVISIBLE
-        } else {
-            if (logVO == null || "440" != logVO.mccString || "11" != logVO.mncString|| 4 != logVO.gen) {
-                // 他キャリア
-                txtCellInfoEci.text = ""
-                txtCellInfoTac.text = ""
-                txtCellInfoPci.text = ""
-                txtCellInfoTac.visibility = View.INVISIBLE
-                txtCellInfoPci.visibility = View.INVISIBLE
-            } else {
-                val ctx = this
-                when (val name = app.myMapManager.getName(logVO.ci, latlng)) {
-                    null -> txtCellInfoEci.text = ""   // そもそもマイマップにeNB-LCIDの定義がない
-                    "" -> {
-                        // マイマップに乗ってない
-                        val cell = CellId(logVO.ci)
-
-                        val enbInfo = RmCellClassification.getEnbInfo(cell.eNB)
-                        val tacInfo = RmCellClassification.getTacInfo(logVO.tac)
-                        val pciInfo = RmCellClassification.getPciInfo(logVO.pci)
-
-                        //// ECI(eNB)
-                        val eciColor = RmCellClassification.getColor(enbInfo.second)
-                        val eciColors =
-                            RmCellClassification.getFgBgColor(ctx, eciColor, cell.sector3)
-                        txtCellInfoEci.setBackgroundColor(eciColors.first)
-                        txtCellInfoEci.setTextColor(eciColors.second)
-                        txtCellInfoEci.text = "${cell.eNB}-${cell.sector} (${enbInfo.first})"
-
-                        //// TAC
-                        // TACの色は、マクロセル以外（つまりCasaか移動局）の場合はその色、マクロセルならECIと同じ色
-                        val tacColor = when {
-                            tacInfo.second != 0 -> RmCellClassification.getColor(tacInfo.second)
-                            else -> eciColor
-                        }
-                        val tacColors =
-                            RmCellClassification.getFgBgColor(ctx, tacColor, cell.sector3)
-                        txtCellInfoTac.setBackgroundColor(tacColors.first)
-                        txtCellInfoTac.setTextColor(tacColors.second)
-                        txtCellInfoTac.visibility = View.VISIBLE
-                        txtCellInfoTac.text = "TAC:${logVO.tac} (${tacInfo.first})"
-
-                        //// PCI
-                        val pciColor = RmCellClassification.getColor(pciInfo.second)
-                        val pciColors =
-                            RmCellClassification.getFgBgColor(ctx, pciColor, cell.sector3)
-                        txtCellInfoPci.setBackgroundColor(pciColors.first)
-                        txtCellInfoPci.setTextColor(pciColors.second)
-                        txtCellInfoPci.visibility = View.VISIBLE
-                        txtCellInfoPci.text = "PCI:${logVO.pci} (${pciInfo.first})"
-                    }
-                    else -> {
-                        // 基地局名表示
-                        txtCellInfoEci.text = name
-                        txtCellInfoEci.setBackgroundColor(
-                            ContextCompat.getColor(
-                                ctx,
-                                R.color.colorMapObjBg
-                            )
-                        )
-                        txtCellInfoEci.setTextColor(
-                            ContextCompat.getColor(
-                                ctx,
-                                R.color.colorMapObjFg
-                            )
-                        )
-
-                        txtCellInfoTac.visibility = View.INVISIBLE
-                        txtCellInfoPci.visibility = View.INVISIBLE
-                    }
+        if (Utils.getPreferenceBoolean("displayCellName", true)
+            && logVO != null && "440" == logVO.mccString && "11" == logVO.mncString && 4 == logVO.gen) {
+            val (name, dist) = app.myMapManager.getName(logVO.ci, latlng)
+            if (!name.isNullOrBlank()) {
+                // 基地局名表示
+                txtCellInfoName.visibility = View.VISIBLE
+                if ( 3000<dist) {
+                    txtCellInfoName.text = "%s - %.1fkm".format(name,  dist/1000)
                 }
+                else {
+                    txtCellInfoName.text = name
+                }
+                txtCellInfoName.setBackgroundColor(
+                    ContextCompat.getColor(
+                        ctx,
+                        R.color.colorMapObjBg
+                    )
+                )
+                txtCellInfoName.setTextColor(
+                    ContextCompat.getColor(
+                        ctx,
+                        R.color.colorMapObjFg
+                    )
+                )
+            }
+            if (name=="" || ( -108 <= logVO.rsrp && 3000 < dist)) {
+                // マイマップに乗ってない、または電波が強いのに遠すぎる
+                val cell = CellId(logVO.ci)
+
+                val enbInfo = RmCellClassification.getEnbInfo(cell.eNB)
+                val tacInfo = RmCellClassification.getTacInfo(logVO.tac)
+                val pciInfo = RmCellClassification.getPciInfo(logVO.pci)
+
+                //// ECI(eNB)
+                val eciColor = RmCellClassification.getColor(enbInfo.second)
+                val eciColors =
+                    RmCellClassification.getFgBgColor(ctx, eciColor, cell.sector3)
+                txtCellInfoEci.setBackgroundColor(eciColors.first)
+                txtCellInfoEci.setTextColor(eciColors.second)
+                txtCellInfoEci.visibility = View.VISIBLE
+                txtCellInfoEci.text = "${cell.eNB}-${cell.sector} (${enbInfo.first})"
+
+                //// TAC
+                // TACの色は、マクロセル以外（つまりCasaか移動局）の場合はその色、マクロセルならECIと同じ色
+                val tacColor = when {
+                    tacInfo.second != 0 -> RmCellClassification.getColor(tacInfo.second)
+                    else -> eciColor
+                }
+                val tacColors =
+                    RmCellClassification.getFgBgColor(ctx, tacColor, cell.sector3)
+                txtCellInfoTac.setBackgroundColor(tacColors.first)
+                txtCellInfoTac.setTextColor(tacColors.second)
+                txtCellInfoTac.visibility = View.VISIBLE
+                txtCellInfoTac.text = "TAC:${logVO.tac} (${tacInfo.first})"
+
+                //// PCI
+                val pciColor = RmCellClassification.getColor(pciInfo.second)
+                val pciColors =
+                    RmCellClassification.getFgBgColor(ctx, pciColor, cell.sector3)
+                txtCellInfoPci.setBackgroundColor(pciColors.first)
+                txtCellInfoPci.setTextColor(pciColors.second)
+                txtCellInfoPci.visibility = View.VISIBLE
+                txtCellInfoPci.text = "PCI:${logVO.pci} (${pciInfo.first})"
             }
         }
-
-        // 名前が""なら非表示にする
-        txtCellInfoEci.visibility = if (txtCellInfoEci.text == "") View.INVISIBLE else View.VISIBLE
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -1503,6 +1515,9 @@ class MapsActivity : AppCompatActivity(),
                         initRecordManager()
                         app.recordManager.rePlot(app.mMap)
                     }
+                    val app = MyApplication.getInstance()
+                    app.lcidView.setMymap(app.myMapManager.kmlParserAry)
+
                     prevDisplayedCell = -1
                 } else {
                     Toast.makeText(app.applicationContext, result, Toast.LENGTH_SHORT).show()
@@ -1874,6 +1889,33 @@ class MapsActivity : AppCompatActivity(),
         val bTraffic2 = bTraffic ?: Utils.getPreferenceBoolean("mapLayerTraffic", false)
         mMap.isTrafficEnabled = bTraffic2
         setMapLayersBtnOnOff()
+    }
+
+    private fun changeViewMode(bChange:Boolean) {
+        var cellInfoViewLarge = Utils.getPreferenceBoolean("cellInfoViewLarge", false)
+        var lcidViewVisible = Utils.getPreferenceBoolean("lcidViewVisible", false)
+
+        if ( bChange){
+            if (cellInfoViewLarge) {
+                cellInfoViewLarge = false
+            } else {
+                if ( lcidViewVisible ) {
+                    cellInfoViewLarge = true
+                    lcidViewVisible = false
+                } else {
+                    lcidViewVisible = true
+                }
+            }
+            Utils.setPreferenceBoolean("cellInfoViewLarge", cellInfoViewLarge)
+            Utils.setPreferenceBoolean("lcidViewVisible", lcidViewVisible)
+        }
+
+        cellInfoView.bLarge = cellInfoViewLarge
+        lcidView.visibility = when {
+            lcidViewVisible -> View.VISIBLE
+            else -> View.GONE
+        }
+        reCalcCellInfoViewLayout2()
     }
 
     fun onClickMyMap1(view: android.view.View) {

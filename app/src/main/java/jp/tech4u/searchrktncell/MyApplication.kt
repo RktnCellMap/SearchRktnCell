@@ -25,6 +25,7 @@ class MyApplication : Application() {
     val myMapManager = MyMapManager()
     val recordManager = RecordManager()
     lateinit var mMap: GoogleMap
+    lateinit var lcidView: LcidView
 
     override fun onCreate() {
         super.onCreate()

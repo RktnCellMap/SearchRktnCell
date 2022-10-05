@@ -298,10 +298,26 @@
             app:title="設定インポート"
             app:summary="設定をファイルから読み込みます"
             />
-    <Preference
+
+   <!-- 以下、データ保存用 -->
+   <Preference
             app:key="destination"
             app:title="目的地(lat,lan)"
             app:summary="データ保存用です"
             app:isPreferenceVisible="false"
     />
+    <SwitchPreference
+            app:key="cellInfoViewLarge"
+            app:title="電測表示部大小"
+            app:summary="データ保存用です"
+            android:defaultValue="false"
+            app:isPreferenceVisible="false"
+            />
+    <SwitchPreference
+            app:key="lcidViewVisible"
+            app:title="LCID表示非表示"
+            app:summary="データ保存用です"
+            android:defaultValue="false"
+            app:isPreferenceVisible="false"
+            />
 </PreferenceScreen>

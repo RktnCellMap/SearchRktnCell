@@ -27,7 +27,7 @@ class MyMapManager {
     // root_preferences.xml のマイマップ定義の個数と合わせてください
     val myMapUrlKeys = arrayOf("myMapUrl", "myMapUrl2", "myMapUrl3", "myMapUrl4", "myMapUrl5")
 
-    private val kmlParserAry:Array<KmlParser?> = arrayOfNulls(myMapUrlKeys.size)
+    val kmlParserAry:Array<KmlParser?> = arrayOfNulls(myMapUrlKeys.size)
     private var locLine: Polyline? = null    // 基地局-現在地の線
     var myMapLL: LatLng? = null           // 掴んでいる基地局の位置
 
@@ -187,7 +187,7 @@ class MyMapManager {
                 // （カスタムアイコンはkmzに含まれるので問題ない）
             }
         }
-        val marker: Marker = mMap.addMarker(markerOptions)
+        val marker: Marker = mMap.addMarker(markerOptions) as Marker
         val ecis = placemark.eciAry.joinToString(",")
         kmlParser.markerList.add(marker)
         kmlParser.markerMapByEcis[ecis] = marker
@@ -199,8 +199,9 @@ class MyMapManager {
         myMapLL = null
     }
 
-    private fun getPlacemark(cellid: Long, latlng:LatLng): KmlParser.Placemark? {
+    private fun getPlacemark(cellid: Long, latlng:LatLng): Pair<KmlParser.Placemark?, Double> {
         var placemark: KmlParser.Placemark? = null
+        var minDistance = 40000000.0  // 大きい値ということで地球一周
 
         for (kmlParser in kmlParserAry) {
             if (kmlParser == null) continue
@@ -208,13 +209,13 @@ class MyMapManager {
             placemark = if (!eciMap.containsKey(cellid)) {
                 null
             } else {
+                var rslt: KmlParser.Placemark? = null
                 if (eciMap[cellid]?.size == 1) {
                     // 1件の場合は安直にそれ。
-                    eciMap[cellid]?.get(0)
+                    rslt = eciMap[cellid]?.get(0)
+                    minDistance = SphericalUtil.computeDistanceBetween(rslt!!.ll, latlng)
                 } else {
                     // 複数ある場合は近いのを採用
-                    var minDistance = 40000000.0  // 大きい値ということで地球一周
-                    var rslt: KmlParser.Placemark? = null
                     for (pm in eciMap[cellid]!!) {
                         val dist = SphericalUtil.computeDistanceBetween(pm.ll, latlng)
                         if (dist < minDistance) {
@@ -222,12 +223,12 @@ class MyMapManager {
                             minDistance = dist
                         }
                     }
-                    rslt
                 }
+                rslt
             }
             if (placemark != null) break
         }
-        return placemark
+        return Pair(placemark, minDistance)
     }
 
     // 基地局への線を描画する
@@ -240,7 +241,7 @@ class MyMapManager {
             return false
         }
 
-        val placemark = getPlacemark(logVO.ci, latlng)
+        val (placemark, _) = getPlacemark(logVO.ci, latlng)
         myMapLL = placemark?.ll
 
         if (myMapLL != null) {
@@ -256,13 +257,13 @@ class MyMapManager {
         return false
     }
 
-    fun getName(cellid: Long, latlng: LatLng): String? {
+    fun getName(cellid: Long, latlng: LatLng): Pair<String?, Double> {
         return if (!eciDefined) {
             // そもそもマイマップにeNB-LCIDの定義がない
-            null
+            Pair(null, 0.0)
         } else {
-            val placemark = getPlacemark(cellid, latlng)
-            placemark?.name ?: ""
+            val (placemark, dist) = getPlacemark(cellid, latlng)
+            Pair(placemark?.name ?: "", dist)
         }
     }
 
@@ -270,5 +271,8 @@ class MyMapManager {
         val kmlParser = this.kmlParserAry[index] ?: return
         kmlParser.clear()
         hideDuplicatePlacemark()
+
+        val app = MyApplication.getInstance()
+        app.lcidView.setMymap(app.myMapManager.kmlParserAry)
     }
 }
