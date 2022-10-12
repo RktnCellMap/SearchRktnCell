@@ -541,6 +541,9 @@ class MapsActivity : AppCompatActivity(),
     override fun onResume() {
         super.onResume()
         Log.i(localClassName, "onResume")
+        cellInfoView.drawCellInfoViewOutOfService()
+        prevDisplayedCell = -1L
+        lastLocation = null
         startLocationUpdates()
 
         if (magneticSensorExists ) {
@@ -942,7 +945,7 @@ class MapsActivity : AppCompatActivity(),
 
         // 圏外の場合は、上のビューに圏外表示
         if (lastLogVO == null) {
-            cellInfoView.drawCellInfoView(null, latlng)
+            cellInfoView.drawCellInfoViewOutOfService()
             isConnected = false
             app.myMapManager.removeLocLine()
             app.mlsManager.removeMls()
