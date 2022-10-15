@@ -708,8 +708,7 @@ class MapsActivity : AppCompatActivity(),
         }
 
         locationCallback = object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult?) {
-                locationResult ?: return
+            override fun onLocationResult(locationResult: LocationResult) {
                 val location = locationResult.lastLocation
                 location ?: return
 
@@ -745,6 +744,13 @@ class MapsActivity : AppCompatActivity(),
 
         phoneStateListener = object : PhoneStateListener() {
             override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>?) {
+                if (ActivityCompat.checkSelfPermission(
+                        MyApplication.getInstance(),
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    return
+                }
                 super.onCellInfoChanged(cellInfo)
                 Log.d(LOGTAG_CELLINFO, "onCellInfoChanged")
                 cellInfo ?: return  // SIMを抜いたときはnullなので

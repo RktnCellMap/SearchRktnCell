@@ -158,7 +158,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             context?.applicationContext?.contentResolver?.openOutputStream(uri)
                 .use { outputStream ->
                     if (outputStream != null) {
-                        val map = preferenceManager.sharedPreferences.all.toMutableMap()
+                        val map = preferenceManager.sharedPreferences?.all?.toMutableMap() ?: return
                         // エクスポート対象外を削除
                         map.remove("deleteAllRadioInfoButton")
                         map.remove("version")
@@ -299,12 +299,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
     override fun onResume() {
         super.onResume()
         val instance = MapsActivity.getInstance()
-        preferenceManager.sharedPreferences.registerOnSharedPreferenceChangeListener(instance)
+        preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(instance)
     }
 
     override fun onPause() {
         super.onPause()
         val instance = MapsActivity.getInstance()
-        preferenceManager.sharedPreferences.unregisterOnSharedPreferenceChangeListener(instance)
+        preferenceManager.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(instance)
     }
 }
