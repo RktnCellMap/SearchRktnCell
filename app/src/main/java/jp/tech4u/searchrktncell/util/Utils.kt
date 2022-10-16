@@ -2,11 +2,12 @@ package jp.tech4u.searchrktncell.util
 
 import android.content.Context
 import android.graphics.Color
-import android.telephony.CellInfo
 import android.text.TextUtils
 import android.util.Log
 import androidx.preference.PreferenceManager
 import com.google.android.gms.maps.model.LatLng
+import cz.mroczis.netmonster.core.model.cell.ICell
+import cz.mroczis.netmonster.core.model.connection.PrimaryConnection
 import jp.tech4u.searchrktncell.MyApplication
 import jp.tech4u.searchrktncell.R
 import jp.tech4u.searchrktncell.data.DebugVO
@@ -184,11 +185,11 @@ object Utils {
         return if (y < 128) R.color.colorThemeIndependentLight else R.color.colorThemeIndependentDark
     }
 
-    fun getActiveMnc(cellInfoAry: List<CellInfo>): String? {
+    fun getActiveMnc(cellInfoAry: List<ICell>): String? {
         val listMnc = mutableListOf<String?>()
         for (cellInfo in cellInfoAry) {
-            if (cellInfo.isRegistered) {
-                val mncString = cellInfo.mncString
+            if (cellInfo.connectionStatus is PrimaryConnection) {
+                val mncString = cellInfo.network?.mnc
                 if (mncString != null && mncString != "") {
                     listMnc.add(mncString)
                 }

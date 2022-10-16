@@ -1,7 +1,7 @@
 package jp.tech4u.searchrktncell.data
 
-import android.telephony.CellInfo
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import jp.tech4u.searchrktncell.MapsActivity
 
 @JsonIgnoreProperties(ignoreUnknown=true)
 data class LogVO (
@@ -19,6 +19,6 @@ data class LogVO (
     val gen: Int = 4,
     var debug: DebugVO? = null,
 ) {
-    fun bwStr() = if (this.bw == CellInfo.UNAVAILABLE) "-" else "${this.bw / 1000}MHz"
-    fun taStr() = if (this.ta == CellInfo.UNAVAILABLE) "-" else this.ta.toString()
+    fun bwStr() = if (this.bw == MapsActivity.UNAVAILABLE) "-" else "${this.bw / 1000}MHz"
+    fun taStr() = if (this.ta == MapsActivity.UNAVAILABLE) "-" else this.ta.toString()
 }

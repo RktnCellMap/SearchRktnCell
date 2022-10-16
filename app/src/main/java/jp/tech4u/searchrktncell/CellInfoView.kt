@@ -2,16 +2,17 @@ package jp.tech4u.searchrktncell
 
 import android.content.Context
 import android.graphics.*
-import android.os.Build
-import android.telephony.*
 import android.text.TextPaint
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
-import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.SphericalUtil
+import cz.mroczis.netmonster.core.model.cell.CellLte
+import cz.mroczis.netmonster.core.model.cell.CellNr
+import cz.mroczis.netmonster.core.model.cell.CellWcdma
+import cz.mroczis.netmonster.core.model.cell.ICell
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
 import jp.tech4u.searchrktncell.util.*
 import kotlin.math.max
@@ -372,33 +373,26 @@ class CellInfoView : View {
     //// 外部から扱いやすいようにするメソッド群 ////
 
     // 通常のデータ反映
-    fun drawCellInfoView(cellInfo: CellInfo, latLng: LatLng) {
-        if (cellInfo is CellInfoLte) {
+    fun drawCellInfoView(cellInfo: ICell, latLng: LatLng) {
+        if (cellInfo is CellLte) {
             // 4G
             drawCellInfoView(cellInfo, latLng)
-        } else if (29 <= Build.VERSION.SDK_INT && cellInfo is CellInfoNr) {
+        } else if (cellInfo is CellNr) {
             // 5G
-            drawCellInfoView(cellInfo as CellInfoNr)
-        } else if (cellInfo is CellInfoWcdma) {
+            drawCellInfoView(cellInfo)
+        } else if (cellInfo is CellWcdma) {
             // 3G
             drawCellInfoView(cellInfo)
         }
     }
 
     // 3G
-    private fun drawCellInfoView(cellInfo: CellInfoWcdma) {
-        val ci = cellInfo.cellIdentity
-        val css = cellInfo.cellSignalStrength
-        val rnc = ci.cid ushr 16
-        val cid = ci.cid and 65535
-
-        val rsrp = if (css.dbm != CellInfo.UNAVAILABLE) css.dbm else null
-        val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)
-
+    private fun drawCellInfoView(cellInfo: CellWcdma) {
+        val bgColor = getColorByMnc(cellInfo.network?.mcc, cellInfo.network?.mnc)
         val vo =  CellInfoViewVO(
-            rsrp,
-            "LAC-UCID: ${ci.lac}-${ci.cid}",
-            "RNC-CID: ${rnc}-${cid}",
+            cellInfo.signal.dbm,
+            "LAC-UCID: ${cellInfo.lac}-${cellInfo.cid}",
+            "RNC-CID: ${cellInfo.rnc}-${cellInfo.cid}",
             "",
             bgColor
         )
@@ -427,64 +421,72 @@ class CellInfoView : View {
     }
 
     private var prevTaLL = LatLng(0.0,0.0)
-    private var prevEci = CellInfo.UNAVAILABLE
-    private var prevTa = CellInfo.UNAVAILABLE
+    private var prevEci:Int? = null
+    private var prevTa:Int? = null
 
     // 4G
-    private fun drawCellInfoView(cellInfo: CellInfoLte, latLng: LatLng) {
-        val cid = cellInfo.cellIdentity
-        val css = cellInfo.cellSignalStrength
-        val enb = cid.ci ushr 8
-        val lcid = cid.ci and 255
+    private fun drawCellInfoView(cellInfo: CellLte, latLng: LatLng) {
 
-        val bw = cellInfo.bandwidthStr
+        var bandwidth:Int? = null
+        val bwFromEarfcn = Utils.getPreferenceBoolean("bwFromEarfcn", false)
+        if (!bwFromEarfcn) {
+            bandwidth = cellInfo.bandwidth
+        }
+        bandwidth = when (bandwidth) {
+            null -> when (cellInfo.band?.downlinkEarfcn) {
+                1500 -> 20 * 1000
+                1575 -> 5 * 1000
+                else -> null
+            }
+            else -> bandwidth
+        }
+
+        val bwStr = if ( bandwidth!=null ){
+            (bandwidth / 1000).toString() + "MHz"
+        } else {
+            "-"
+        }
         val ta = if (Utils.getPreferenceBoolean("countermeasuresForTaNotBeingUpdated", false)) {
             // サムスンTA更新されない対策
-            if (prevEci != cellInfo.cellIdentity.ci || prevTa != cellInfo.cellSignalStrength.timingAdvance) {
+            if (prevEci != cellInfo.eci || prevTa != cellInfo.signal.timingAdvance) {
                 // 変化があったら正しいと判断する
-                prevEci = cellInfo.cellIdentity.ci
-                prevTa = cellInfo.cellSignalStrength.timingAdvance
+                prevEci = cellInfo.eci
+                prevTa = cellInfo.signal.timingAdvance
                 prevTaLL = LatLng(latLng.latitude, latLng.longitude)
-                cellInfo.timingAdvanceStr
+                cellInfo.signal.timingAdvance
             } else {
                 if (SphericalUtil.computeDistanceBetween(prevTaLL, latLng) < 78) {
                     // 変化がない場合、移動距離が一定以内なら信用してやる
-                    cellInfo.timingAdvanceStr
+                    cellInfo.signal.timingAdvance
                 } else {
                     // 一定以上移動したのに変化が無いので信用しない！
-                    "-"
+                    null
                 }
             }
         } else {
             // 通常
-            cellInfo.timingAdvanceStr
+            cellInfo.signal.timingAdvance
         }
+        val taStr = ta?.toString() ?: "-"
 
-        val rsrp = if (css.rsrp != CellInfo.UNAVAILABLE) css.rsrp else null
-        val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+        val bgColor = getColorByMnc(cellInfo.network?.mcc, cellInfo.network?.mnc)
         val vo = CellInfoViewVO(
-            rsrp,
-            "eNB-LCID: ${enb}-${lcid}",
-            "PCI: ${cid.pci}  BW: $bw",
-            "TA: $ta",
+            cellInfo.signal.rsrp?.toInt(),
+            "eNB-LCID: ${cellInfo.enb}-${cellInfo.cid}",
+            "PCI: ${cellInfo.pci}  BW: $bwStr",
+            "TA: $taStr",
             bgColor
         )
         drawCellInfoView(vo)
     }
 
     // 5G
-    @RequiresApi(Build.VERSION_CODES.Q)
-    private fun drawCellInfoView(cellInfo: CellInfoNr) {
-        val cid = cellInfo.cellIdentity as CellIdentityNr
-        val css = cellInfo.cellSignalStrength as CellSignalStrengthNr
-        val bw = cellInfo.bandwidthStr
-
-        val rsrp = if (css.csiRsrp != CellInfo.UNAVAILABLE) css.csiRsrp else null
-        val bgColor = getColorByMnc(cellInfo.mccString, cellInfo.mncString)
+    private fun drawCellInfoView(cellInfo: CellNr) {
+        val bgColor = getColorByMnc(cellInfo.network?.mcc, cellInfo.network?.mnc)
         val vo = CellInfoViewVO(
-            rsrp,
-            "NCI: ${cid.nci}",
-            "PCI: ${cid.pci}  BW: $bw",
+            cellInfo.signal.dbm,
+            "NCI: ${cellInfo.nci}",
+            "PCI: ${cellInfo.pci}",
             "",
             bgColor
         )
@@ -499,6 +501,18 @@ class CellInfoView : View {
             "PCI: -  BW: -",
             "TA: -",
             ContextCompat.getColor(context, R.color.colorForeign)
+        )
+        drawCellInfoView(vo)
+    }
+
+    // データなし
+    fun drawCellInfoViewNull() {
+        val vo = CellInfoViewVO(
+            null,
+            "",
+            "",
+            "",
+            ContextCompat.getColor(context, R.color.colorThemeIndependentDark)
         )
         drawCellInfoView(vo)
     }

@@ -1,6 +1,7 @@
 package jp.tech4u.searchrktncell
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.*
 import android.content.pm.PackageManager
@@ -20,11 +21,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.telephony.CellInfo
-import android.telephony.PhoneStateListener
-import android.telephony.SignalStrength
-import android.telephony.TelephonyManager
-import android.telephony.TelephonyManager.CellInfoCallback
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
@@ -43,6 +39,11 @@ import com.google.android.gms.location.*
 import com.google.android.gms.maps.*
 import com.google.android.gms.maps.model.*
 import com.google.maps.android.SphericalUtil
+import cz.mroczis.netmonster.core.factory.NetMonsterFactory
+import cz.mroczis.netmonster.core.model.cell.CellLte
+import cz.mroczis.netmonster.core.model.cell.CellNr
+import cz.mroczis.netmonster.core.model.cell.CellWcdma
+import cz.mroczis.netmonster.core.model.connection.PrimaryConnection
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
 import jp.tech4u.searchrktncell.data.DebugVO
@@ -59,7 +60,6 @@ import java.io.IOException
 import java.io.InputStream
 import kotlin.math.*
 
-
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
     GoogleMap.OnMapClickListener,
@@ -73,7 +73,6 @@ class MapsActivity : AppCompatActivity(),
     SharedPreferences.OnSharedPreferenceChangeListener {
 
     companion object {
-        private const val LOGTAG_CELLINFO = "CELLINFO"
         private const val MLS_JSON_FILENAME = "mls44011.json"
         private const val MLS_JSON_URL = "https://cellmap.rukihena.com/$MLS_JSON_FILENAME"
 
@@ -83,6 +82,8 @@ class MapsActivity : AppCompatActivity(),
         private const val INITIAL_MAP_ZOOM = 7f
 
         private const val ZOOM_PADDING_DP = 40
+
+        public const val UNAVAILABLE = 0x7fffffff
 
         private lateinit var instance: MapsActivity
 
@@ -95,14 +96,13 @@ class MapsActivity : AppCompatActivity(),
     private val scope = CoroutineScope(Dispatchers.Default)
 
     private lateinit var mMap: GoogleMap
-    private lateinit var telephonyManager: TelephonyManager
 
     private var debugCellInfo: DebugCellInfo? = null
     private val debugTimerHandler = Handler(Looper.getMainLooper())
     private val debugTimerRunnable: Runnable = object : Runnable {
         override fun run() {
             val dummyLocation = Location(LocationManager.PASSIVE_PROVIDER)
-            onDataEvent(listOf(), dummyLocation)
+            onDataEvent(dummyLocation)
             debugTimerHandler.postDelayed(this, DebugCellInfo.INTERVAL_MS)
         }
     }
@@ -156,8 +156,6 @@ class MapsActivity : AppCompatActivity(),
     private lateinit var powerConnectionReceiver: PowerConnectionReceiver
 
     private lateinit var locationCallback: LocationCallback
-    private lateinit var cellInfoUpdateRequestCallback: CellInfoCallback
-    private lateinit var phoneStateListener: PhoneStateListener
 
     private lateinit var sensorManager: SensorManager
     private val accelerometerReading = FloatArray(3)// 加速度
@@ -257,7 +255,6 @@ class MapsActivity : AppCompatActivity(),
         txtMapTerrain = findViewById(R.id.txtMapTerrain)
         txtMapTraffic = findViewById(R.id.txtMapTraffic)
 
-        telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
         initListener()
 
         cellInfoView.setOnTouchListener(onTouchListener)
@@ -541,9 +538,6 @@ class MapsActivity : AppCompatActivity(),
     override fun onResume() {
         super.onResume()
         Log.i(localClassName, "onResume")
-        cellInfoView.drawCellInfoViewOutOfService()
-        prevDisplayedCell = -1L
-        lastLocation = null
         startLocationUpdates()
 
         if (magneticSensorExists ) {
@@ -582,6 +576,15 @@ class MapsActivity : AppCompatActivity(),
     override fun onPause() {
         super.onPause()
         Log.i(localClassName, "onPause")
+
+        cellInfoView.drawCellInfoViewNull()
+        val app = MyApplication.getInstance()
+        app.myMapManager.removeLocLine()
+        app.mlsManager.removeMls()
+        isConnected = false
+        prevDisplayedCell = -1L
+        lastLocation = null
+
         stopLocationUpdates()
         sensorManager.unregisterListener(this)
     }
@@ -682,31 +685,6 @@ class MapsActivity : AppCompatActivity(),
 
     private fun initListener() {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            cellInfoUpdateRequestCallback = object : CellInfoCallback() {
-                override fun onCellInfo(cellInfo: List<CellInfo>) {
-                    if (cellInfo == null) {
-                        Log.d(LOGTAG_CELLINFO, "onCellInfo(): Null reported")
-                        return
-                    } else {
-                        Log.d(LOGTAG_CELLINFO, "onCellInfo()")
-                    }
-                    try {
-                        onCellUpdate(cellInfo)
-                    } catch (ex: SecurityException) {
-                        Log.e(
-                            LOGTAG_CELLINFO,
-                            "onCellInfo(): Coarse location or phone permission is denied"
-                        )
-                    }
-                }
-
-                override fun onError(errorCode: Int, detail: Throwable?) {
-                    Log.e(LOGTAG_CELLINFO, detail.toString())
-                }
-            }
-        }
-
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 val location = locationResult.lastLocation
@@ -726,69 +704,15 @@ class MapsActivity : AppCompatActivity(),
                 Log.d(localClassName, "onLocationResult$pros")
                  */
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    if (ActivityCompat.checkSelfPermission(
-                            applicationContext,
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                        ) == PackageManager.PERMISSION_GRANTED
-                    ) {
-                        telephonyManager.requestCellInfoUpdate(
-                            applicationContext.mainExecutor,
-                            cellInfoUpdateRequestCallback
-                        )
-                    }
-                }
                 onLocation(location)
             }
-        }
-
-        phoneStateListener = object : PhoneStateListener() {
-            override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>?) {
-                if (ActivityCompat.checkSelfPermission(
-                        MyApplication.getInstance(),
-                        Manifest.permission.ACCESS_FINE_LOCATION
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    return
-                }
-                super.onCellInfoChanged(cellInfo)
-                Log.d(LOGTAG_CELLINFO, "onCellInfoChanged")
-                cellInfo ?: return  // SIMを抜いたときはnullなので
-                onCellUpdate(cellInfo)
-            }
-
-            override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
-                super.onSignalStrengthsChanged(signalStrength)
-                Log.d(LOGTAG_CELLINFO, "onSignalStrengthsChanged")
-                if (ActivityCompat.checkSelfPermission(
-                        MyApplication.getInstance(),
-                        Manifest.permission.ACCESS_FINE_LOCATION
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    return
-                }
-                if (lastLocation != null) {
-                    onDataEvent(telephonyManager.allCellInfo, lastLocation!!)
-                }
-            }
-        }
-    }
-
-    private fun onCellUpdate(cellInfo: List<CellInfo>) {
-        val activeMnc = Utils.getActiveMnc(cellInfo)
-        if (activeMnc != "11") {
-            // 楽天以外なら無視（DualSIM機で、他社をチラチラ拾ってしまうことがあるため）
-            return
-        }
-        if (lastLocation != null) {
-            onDataEvent(cellInfo, lastLocation!!)
         }
     }
 
     private fun onLocation(location: Location) {
         val latlng = LatLng(location.latitude, location.longitude)
         Log.v(
-            LOGTAG_CELLINFO,
+            localClassName,
             "onLocation ${latlng.latitude} , ${latlng.longitude} (${location.provider}, ${location.accuracy})"
         )
 
@@ -803,16 +727,23 @@ class MapsActivity : AppCompatActivity(),
             location.altitude.toFloat(),
             System.currentTimeMillis()
         )
-
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_PHONE_STATE
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+            // onLocation()が呼ばれたということは、LOCATION権限はある。警告避けで上記if文がある。
+            // READ_PHONE_STATEが無いということなので、チェックする。
+            requestPermissionReadPhoneState()
             return
         }
-        val cellInfoAry = telephonyManager.allCellInfo
-        onDataEvent(cellInfoAry, location)
+        onDataEvent(location)
     }
 
     // ダミー通信
@@ -837,7 +768,7 @@ class MapsActivity : AppCompatActivity(),
     }
 
     // onLocation と PhoneStateListenerのイベントから呼ばれる
-    private fun onDataEvent(cellInfoAry: List<CellInfo>, pLocation: Location) {
+    private fun onDataEvent(pLocation: Location) {
         val app = MyApplication.getInstance()
 
         // デバッグ用の表示（リリース時もこのまま残します）
@@ -888,25 +819,84 @@ class MapsActivity : AppCompatActivity(),
         } else {
             // リリース版
             latlng = LatLng(pLocation.latitude, pLocation.longitude)
+            var netMonster = NetMonsterFactory.get(this)
+            var cellInfoAry = netMonster.getCells()
             val activeMnc = Utils.getActiveMnc(cellInfoAry)
             for (cellInfo in cellInfoAry) {
                 // 処理しない条件
-                if (!cellInfo.isRegistered) continue
-                if (cellInfo.mncString != activeMnc) continue
-                if (cellInfo.rsrp == CellInfo.UNAVAILABLE) continue // https://twitter.com/InappyRakuten/status/1383300298953805824
+                if (cellInfo.connectionStatus !is PrimaryConnection) continue
+                if (cellInfo.network == null) continue
+                if (cellInfo.network?.mnc == null) continue
+                if (cellInfo.network?.mnc != activeMnc) continue
+                if (cellInfo is CellLte) {
+                    if (cellInfo.signal.rsrp == null) continue // https://twitter.com/InappyRakuten/status/1383300298953805824
+                    if (cellInfo.eci == null) continue
+                } else if (cellInfo is CellWcdma) {
+                    if (cellInfo.signal.dbm == null) continue
+                    if (cellInfo.cid == null) continue
+                } else if (cellInfo is CellNr) {
+                    if (cellInfo.signal.dbm == null) continue
+                    if (cellInfo.nci == null) continue
+                } else continue
 
                 // CellInfoView 反映
                 cellInfoView.drawCellInfoView(cellInfo, latlng)
                 isConnected = true
 
                 // データ準備
-                val logVO = LogVO(
-                    (System.currentTimeMillis() / 1000).toInt(),
-                    latlng.latitude, latlng.longitude,
-                    cellInfo.mccString, cellInfo.mncString,
-                    cellInfo.tac, cellInfo.ci,
-                    cellInfo.rsrp, cellInfo.bandwidth, cellInfo.timingAdvance, cellInfo.pci, cellInfo.gen
-                )
+                val logVO = when (cellInfo) {
+                    is CellLte -> {
+                        val cellLte = cellInfo as CellLte
+                        LogVO(
+                            (System.currentTimeMillis() / 1000).toInt(),
+                            latlng.latitude,
+                            latlng.longitude,
+                            cellLte.network?.mcc,
+                            cellLte.network?.mnc,
+                            cellLte.tac ?: UNAVAILABLE,
+                            cellLte.eci?.toLong() ?: UNAVAILABLE.toLong(),
+                            cellLte.signal.rsrp?.toInt() ?: UNAVAILABLE,
+                            cellLte.bandwidth ?: UNAVAILABLE,
+                            cellLte.signal.timingAdvance ?: UNAVAILABLE,
+                            cellLte.pci ?: UNAVAILABLE,
+                            4
+                        )
+                    }
+                    is CellNr -> {
+                        val cellNr = cellInfo as CellNr
+                        LogVO(
+                            (System.currentTimeMillis() / 1000).toInt(),
+                            latlng.latitude,
+                            latlng.longitude,
+                            cellNr.network?.mcc,
+                            cellNr.network?.mnc,
+                            cellNr.tac ?: UNAVAILABLE,
+                            cellNr.nci ?: UNAVAILABLE.toLong(),
+                            cellNr.signal.dbm ?: UNAVAILABLE,
+                            UNAVAILABLE,
+                            UNAVAILABLE,
+                            cellNr.pci ?: UNAVAILABLE,
+                            5
+                        )
+                    }
+                    else -> {
+                        val cellWcdma = cellInfo as CellWcdma
+                        LogVO(
+                            (System.currentTimeMillis() / 1000).toInt(),
+                            latlng.latitude,
+                            latlng.longitude,
+                            cellWcdma.network?.mcc,
+                            cellWcdma.network?.mnc,
+                            cellWcdma.lac ?: UNAVAILABLE,
+                            cellWcdma.cid?.toLong() ?: UNAVAILABLE.toLong(),
+                            cellWcdma.signal.dbm ?: UNAVAILABLE,
+                            UNAVAILABLE,
+                            UNAVAILABLE,
+                            cellWcdma.psc ?: UNAVAILABLE,
+                            3
+                        )
+                    }
+                }
                 if (DebugCellInfo.USE_GPS_LOG) {
                     val debugVO = DebugVO(
                         pLocation.accuracy,
@@ -995,7 +985,7 @@ class MapsActivity : AppCompatActivity(),
         }
 
         displayCellName(lastLogVO, latlng)
-        //Log.d(LOGTAG_CELLINFO,"onDataEvent(): CI:${lastLogVO?.ci} TA:${lastLogVO?.ta} $cellInfoAry")
+        //Log.d(localClassName,"onDataEvent(): CI:${lastLogVO?.ci} TA:${lastLogVO?.ta} $cellInfoAry")
 
         // 地図表示位置反映
         if (bMoveCurrentLocation) {
@@ -1452,12 +1442,6 @@ class MapsActivity : AppCompatActivity(),
         }
 
         mMap.isMyLocationEnabled = true
-
-        // 権限が必要なので、ここでやる。
-        telephonyManager.listen(
-            phoneStateListener,
-            PhoneStateListener.LISTEN_CELL_INFO or PhoneStateListener.LISTEN_SIGNAL_STRENGTHS
-        )
     }
 
     // 青ポチを表示する/しない
