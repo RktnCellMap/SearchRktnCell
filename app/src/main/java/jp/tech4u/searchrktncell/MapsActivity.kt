@@ -994,11 +994,13 @@ class MapsActivity : AppCompatActivity(),
     }
 
     private var prevDisplayedCell: Long? = -1
+    private var prevDisplayedPci: Int? = -1
 
     private fun displayCellName(logVO: LogVO?, latlng: LatLng) {
         // 前回と同じなら書き換えない
-        if (prevDisplayedCell == logVO?.ci) return
+        if (prevDisplayedCell == logVO?.ci && prevDisplayedPci == logVO?.pci) return
         prevDisplayedCell = logVO?.ci
+        prevDisplayedPci = logVO?.pci
 
         txtCellInfoName.text = ""
         txtCellInfoEci.text = ""
@@ -1074,7 +1076,7 @@ class MapsActivity : AppCompatActivity(),
                 txtCellInfoPci.setBackgroundColor(pciColors.first)
                 txtCellInfoPci.setTextColor(pciColors.second)
                 txtCellInfoPci.visibility = View.VISIBLE
-                txtCellInfoPci.text = "PCI:${logVO.pci} (${pciInfo.first})"
+                txtCellInfoPci.text = "PCI:${logVO.pciStr()} (${pciInfo.first})"
             }
         }
     }

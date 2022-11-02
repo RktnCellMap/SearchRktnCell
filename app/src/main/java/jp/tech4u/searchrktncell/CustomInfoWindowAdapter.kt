@@ -42,7 +42,7 @@ class CustomInfoWindowAdapter(newActivity: Activity) : InfoWindowAdapter {
 
         txtTitle.text = "${ci.eNB}-${ci.sector} (${enbInfo.first})"
         txtSnippet1.text = "TAC:${logVO.tac} (${tacInfo.first})"
-        txtSnippet2.text = "PCI:${logVO.pci} (${pciInfo.first})"
+        txtSnippet2.text = "PCI:${logVO.pciStr()} (${pciInfo.first})"
         txtSnippet3.text = "RSRP:${logVO.rsrp} TA:${logVO.taStr()}"
     }
 }

@@ -2,6 +2,7 @@ package jp.tech4u.searchrktncell.util
 
 import android.content.Context
 import androidx.core.content.ContextCompat
+import jp.tech4u.searchrktncell.MapsActivity
 import jp.tech4u.searchrktncell.R
 
 /**
@@ -282,6 +283,10 @@ class RmCellClassification {
                 }
                 in 492..503 -> {
                     pciTypeName = "Casa"
+                    pciTypeNum = 3
+                }
+                MapsActivity.UNAVAILABLE -> {
+                    pciTypeName = "不明"
                     pciTypeNum = 3
                 }
                 else -> {

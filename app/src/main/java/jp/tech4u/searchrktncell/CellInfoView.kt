@@ -468,12 +468,16 @@ class CellInfoView : View {
             cellInfo.signal.timingAdvance
         }
         val taStr = ta?.toString() ?: "-"
+        val pciStr = when (cellInfo.pci) {
+            MapsActivity.UNAVAILABLE -> "-"
+            else -> cellInfo.pci?.toString() ?: "-"
+        }
 
         val bgColor = getColorByMnc(cellInfo.network?.mcc, cellInfo.network?.mnc)
         val vo = CellInfoViewVO(
             cellInfo.signal.rsrp?.toInt(),
             "eNB-LCID: ${cellInfo.enb}-${cellInfo.cid}",
-            "PCI: ${cellInfo.pci}  BW: $bwStr",
+            "PCI: $pciStr  BW: $bwStr",
             "TA: $taStr",
             bgColor
         )
