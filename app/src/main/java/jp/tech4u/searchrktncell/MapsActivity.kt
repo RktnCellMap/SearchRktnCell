@@ -582,7 +582,7 @@ class MapsActivity : AppCompatActivity(),
         app.myMapManager.removeLocLine()
         app.mlsManager.removeMls()
         isConnected = false
-        prevDisplayedCell = -1L
+        prevDisplayedLogVO = null
         lastLocation = null
 
         stopLocationUpdates()
@@ -619,7 +619,7 @@ class MapsActivity : AppCompatActivity(),
         }
 
         // 書き換えが必要かもしれないので、適当な値を入れとく
-        prevDisplayedCell = -1L
+        prevDisplayedLogVO = null
 
         setTheme()
     }
@@ -993,14 +993,14 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-    private var prevDisplayedCell: Long? = -1
-    private var prevDisplayedPci: Int? = -1
+    private var prevDisplayedLogVO: LogVO? = null
 
     private fun displayCellName(logVO: LogVO?, latlng: LatLng) {
         // 前回と同じなら書き換えない
-        if (prevDisplayedCell == logVO?.ci && prevDisplayedPci == logVO?.pci) return
-        prevDisplayedCell = logVO?.ci
-        prevDisplayedPci = logVO?.pci
+        if ( prevDisplayedLogVO!=null ) {
+            if (prevDisplayedLogVO!!.equalsId(logVO)) return
+        }
+        prevDisplayedLogVO = logVO?.copy()
 
         txtCellInfoName.text = ""
         txtCellInfoEci.text = ""
@@ -1513,7 +1513,7 @@ class MapsActivity : AppCompatActivity(),
                     val app = MyApplication.getInstance()
                     app.lcidView.setMymap(app.myMapManager.kmlParserAry)
 
-                    prevDisplayedCell = -1
+                    prevDisplayedLogVO = null
                 } else {
                     Toast.makeText(app.applicationContext, result, Toast.LENGTH_SHORT).show()
                 }
@@ -1734,12 +1734,12 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
 
-            // 書き換えが必要かもしれないので、適当な値を入れとく
+            // 書き換えが必要かもしれないので、null値を入れとく
             // (必要な場合だけやるべきだけど、
             // 　・漏れがあるとよろしくない。
             // 　・余計な処理が走ったとしても大した処理量でない
             // ということから、任意の設定をいじったら必ずやることにした)
-            prevDisplayedCell = -1
+            prevDisplayedLogVO = null
         }
     }
 
