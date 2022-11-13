@@ -107,6 +107,18 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
+    private val timerHandler = Handler(Looper.getMainLooper())
+    private val timerRunnable: Runnable = object : Runnable {
+        override fun run() {
+            if (lastLocation != null) {
+                if (lastLocationEpoch + 2000 < System.currentTimeMillis()) {
+                    onDataEvent(lastLocation!!)
+                }
+            }
+            timerHandler.postDelayed(this, 1000)
+        }
+    }
+
     // 現在地連動予約時刻
     private var enableLocationEpoch = 0L
 
@@ -200,6 +212,7 @@ class MapsActivity : AppCompatActivity(),
 
     // 最後に得た現在地（PhoneStateListenerで参照）
     private var lastLocation: Location? = null
+    private var lastLocationEpoch = 0L
 
     private var retryLocation: Boolean = false
 
@@ -539,6 +552,7 @@ class MapsActivity : AppCompatActivity(),
         super.onResume()
         Log.i(localClassName, "onResume")
         startLocationUpdates()
+        timerHandler.postDelayed(timerRunnable, 1000)
 
         if (magneticSensorExists ) {
             sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.also { rotationVector ->
@@ -586,6 +600,7 @@ class MapsActivity : AppCompatActivity(),
         lastLocation = null
 
         stopLocationUpdates()
+        timerHandler.removeCallbacks(timerRunnable)
         sensorManager.unregisterListener(this)
     }
 
@@ -721,6 +736,7 @@ class MapsActivity : AppCompatActivity(),
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latlng, 15f))
         }
         lastLocation = location
+        lastLocationEpoch = System.currentTimeMillis()
         geomagneticField = GeomagneticField(
             location.latitude.toFloat(),
             location.longitude.toFloat(),
