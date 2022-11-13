@@ -283,6 +283,15 @@
             android:defaultValue="false"
             />
 
+    <SeekBarPreference
+            app:key="eciChangeDistThreshold"
+            app:title="eNB-LCID変更認識距離[km]"
+            android:max="20"
+            app:min="1"
+            android:defaultValue="3"
+            app:showSeekBarValue="true"
+            />
+
     <Preference
             app:key="version"
             app:title="バージョン"

@@ -1016,11 +1016,12 @@ class MapsActivity : AppCompatActivity(),
 
         if (Utils.getPreferenceBoolean("displayCellName", true)
             && logVO != null && "440" == logVO.mccString && "11" == logVO.mncString && 4 == logVO.gen) {
+            val eciChangeDistThreshold = Utils.getPreferenceInt("eciChangeDistThreshold", 3)
             val (name, dist) = app.myMapManager.getName(logVO.ci, latlng)
             if (!name.isNullOrBlank()) {
                 // 基地局名表示
                 txtCellInfoName.visibility = View.VISIBLE
-                if ( 3000<dist) {
+                if ( eciChangeDistThreshold*1000<dist) {
                     txtCellInfoName.text = "%s - %.1fkm".format(name,  dist/1000)
                 }
                 else {
@@ -1039,7 +1040,7 @@ class MapsActivity : AppCompatActivity(),
                     )
                 )
             }
-            if (name=="" || ( -108 <= logVO.rsrp && 3000 < dist)) {
+            if (name=="" || ( -108 <= logVO.rsrp && eciChangeDistThreshold*1000 < dist)) {
                 // マイマップに乗ってない、または電波が強いのに遠すぎる
                 val cell = CellId(logVO.ci)
 
