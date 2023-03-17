@@ -73,7 +73,7 @@ class MapsActivity : AppCompatActivity(),
     SharedPreferences.OnSharedPreferenceChangeListener {
 
     companion object {
-        private const val MLS_JSON_FILENAME = "mls44011.json"
+        private const val MLS_JSON_FILENAME = "mls44011.json.bz2"
         private const val MLS_JSON_URL = "https://cellmap.rukihena.com/$MLS_JSON_FILENAME"
 
         // 地図表示初期位置

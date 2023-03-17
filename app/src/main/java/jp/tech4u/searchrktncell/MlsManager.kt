@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.apache.commons.compress.compressors.CompressorStreamFactory
 import java.io.*
 
 class MlsManager {
@@ -96,7 +97,12 @@ class MlsManager {
         val mapper = jacksonObjectMapper()
         val cellAry: List<MlsCellInfo>
         try {
-            cellAry = mapper.readValue(cacheFile)
+            // 圧縮ファイルを展開したストリームに
+            val fis = FileInputStream(cacheFile)
+            val bis = BufferedInputStream(fis)
+            val cis = CompressorStreamFactory().createCompressorInputStream(bis)
+            // 展開したストリームをjsonパーサに食わせる
+            cellAry = mapper.readValue(cis)
         } catch (e: Exception) {
             Log.i(TAG, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLSパースできませんでした")
             //Toast.makeText(instance, "MLSデータ読み込み失敗", Toast.LENGTH_LONG).show()
