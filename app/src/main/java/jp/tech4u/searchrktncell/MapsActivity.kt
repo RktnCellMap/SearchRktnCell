@@ -398,7 +398,7 @@ class MapsActivity : AppCompatActivity(),
             }
 
             val style = if (bDark) darkMapStyle else null
-            Log.e(localClassName, "setTheme() $bDark")
+            Log.i(localClassName, "setTheme() $bDark")
             val success = mMap.setMapStyle(style)
             if (!success) {
                 Log.e(localClassName, "Style parsing failed.")
