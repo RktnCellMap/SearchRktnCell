@@ -1132,7 +1132,7 @@ class MapsActivity : AppCompatActivity(),
         }
 
         when (item.itemId) {
-            R.id.reloadMls -> scope.launch { readMls(false) }
+            R.id.reloadMls -> scope.launch { readMls(true) }
             R.id.reloadMyMap -> reloadMyMap(true)
             R.id.removeDestination -> stopTinyNavigation()
             R.id.settings -> startActivity(Intent(this@MapsActivity, SettingsActivity::class.java))
