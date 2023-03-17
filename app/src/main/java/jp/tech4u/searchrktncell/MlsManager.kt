@@ -92,15 +92,11 @@ class MlsManager {
 
     private fun parseMlsJson(cacheFile: File) {
         Log.i(TAG, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLS読み込み開始します")
-        val contents = cacheFile.readText(Charsets.UTF_8)
-        Log.i(TAG, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLS読み込みました")
-
         // TODO 高速化(現状でも十分かも)
         val mapper = jacksonObjectMapper()
-
         val cellAry: List<MlsCellInfo>
         try {
-            cellAry = mapper.readValue(contents)
+            cellAry = mapper.readValue(cacheFile)
         } catch (e: Exception) {
             Log.i(TAG, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLSパースできませんでした")
             //Toast.makeText(instance, "MLSデータ読み込み失敗", Toast.LENGTH_LONG).show()
@@ -116,7 +112,7 @@ class MlsManager {
         cidMap = lCidMap
         val app = MyApplication.getInstance()
         app.lcidView.setMls(cidMap)
-        Log.i(TAG, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊格納しました")
+        Log.i(TAG, "＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊MLS格納しました")
         //Toast.makeText(instance, "MLSデータ読み込み成功", Toast.LENGTH_LONG).show()
     }
 
