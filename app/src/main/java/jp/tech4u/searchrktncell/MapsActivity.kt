@@ -1479,15 +1479,15 @@ class MapsActivity : AppCompatActivity(),
 
     private fun reloadMyMap(bReload: Boolean) {
         val app = MyApplication.getInstance()
-        for ((index, key) in app.myMapManager.myMapUrlKeys.withIndex()) {
-            if (Utils.checkMyMapMid(key)) {
-                scope.launch {
+        scope.launch {
+            for ((index, key) in app.myMapManager.myMapUrlKeys.withIndex()) {
+                if (Utils.checkMyMapMid(key)) {
                     reloadMyMap(index, key, bReload)
+                } else {
+                    val pBarMyMap: ProgressBar = findViewById(pBarMyMapAry[index])
+                    pBarMyMap.visibility = View.INVISIBLE
+                    app.myMapManager.clearMyMap(index)
                 }
-            } else {
-                val pBarMyMap: ProgressBar = findViewById(pBarMyMapAry[index])
-                pBarMyMap.visibility = View.INVISIBLE
-                app.myMapManager.clearMyMap(index)
             }
         }
     }
