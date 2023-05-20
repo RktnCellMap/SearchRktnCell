@@ -1,7 +1,6 @@
 package jp.tech4u.searchrktncell
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.*
 import android.content.pm.PackageManager
@@ -765,7 +764,10 @@ class MapsActivity : AppCompatActivity(),
     // ダミー通信
     private fun dummyCommunication() {
 
-        if (!isConnected) return
+        if (!isConnected) {
+            Log.d("dummyCommunication", "接続なし")
+            return
+        }
 
         scope.launch {
             try {
@@ -773,12 +775,20 @@ class MapsActivity : AppCompatActivity(),
                     "dummyCommunicationUrl",
                     "https://cellmap.rukihena.com/dummy.html"
                 )
-                val con = Utils.getHttpURLConnectionFromUrlString(dummyCommunicationUrl!!)
-                val inputStream: InputStream? = con.inputStream
-                if (inputStream != null) {
-                    inputStream.close()
+                val mobile = Utils.getMobileNetwork(applicationContext)
+                if (mobile != null) {
+                    val con = Utils.getHttpURLConForMobile(dummyCommunicationUrl!!, mobile)
+                    val inputStream: InputStream? = con.inputStream
+                    if (inputStream != null) {
+                        inputStream.close()
+                    }
+                } else {
+                    Log.d("dummyCommunication", "CELLULARなし")
                 }
-            } catch (e: IOException) {
+            } catch (e: java.net.UnknownHostException) {
+                Log.d("dummyCommunication", "名前解決できず")
+            } catch (e: Exception) {
+                Log.d("dummyCommunication", e.toString())
             }
         }
     }

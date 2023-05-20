@@ -2,6 +2,9 @@ package jp.tech4u.searchrktncell.util
 
 import android.content.Context
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.text.TextUtils
 import android.util.Log
 import androidx.preference.PreferenceManager
@@ -12,7 +15,11 @@ import jp.tech4u.searchrktncell.MyApplication
 import jp.tech4u.searchrktncell.R
 import jp.tech4u.searchrktncell.data.DebugVO
 import jp.tech4u.searchrktncell.data.LogVO
-import java.io.*
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 import java.lang.Integer.max
 import java.lang.Integer.min
 import java.net.HttpURLConnection
@@ -20,7 +27,7 @@ import java.net.URI
 import java.net.URL
 import java.nio.file.Paths
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
 import kotlin.math.cos
 import kotlin.math.sqrt
 
@@ -78,12 +85,45 @@ object Utils {
         return con
     }
 
-    /*
-    fun getInputStreamFromUrlString(urlString:String) :InputStream?{
-        val con = getHttpURLConnectionFromUrlString(urlString)
-        return con.inputStream
+    fun getHttpURLConForMobile(urlString:String, network: Network) :HttpURLConnection {
+        // TA維持のダミー通信用に用意しました
+        val url = URL(urlString)
+        val con = network.openConnection(url) as HttpURLConnection
+        con.readTimeout = 1500
+        con.connectTimeout = 2000
+        con.requestMethod = "GET"
+        con.instanceFollowRedirects = false
+        con.doInput = true
+
+        // Starts the query
+        con.connect()
+        return con
     }
-     */
+
+    fun getMobileNetwork(context: Context): Network? {
+        // https://qiita.com/shijimi_san/items/9c848db7795d7eaba80f より
+        var mobile: Network? = null
+        try {
+            val connectivityManager =
+                context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val networks = connectivityManager.allNetworks
+            for (network in networks) {
+                if (network != null) {
+                    val capabilities = connectivityManager.getNetworkCapabilities(network)
+                    if (!capabilities!!.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) // インターネットアクセスできないのは無視
+                        continue
+                    if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) // インターネットアクセスできないのは無視
+                        continue
+                    if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                        mobile = network
+                    }
+                }
+            }
+        } catch (e: java.lang.Exception) {
+            Log.d("getMobileNetwork", e.toString())
+        }
+        return mobile
+    }
 
     fun createLogFileObj(context: Context, filename :String? = null): File {
         val filename2 = if ( filename==null) {
