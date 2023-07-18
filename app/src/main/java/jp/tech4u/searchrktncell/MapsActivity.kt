@@ -42,6 +42,7 @@ import cz.mroczis.netmonster.core.factory.NetMonsterFactory
 import cz.mroczis.netmonster.core.model.cell.CellLte
 import cz.mroczis.netmonster.core.model.cell.CellNr
 import cz.mroczis.netmonster.core.model.cell.CellWcdma
+import cz.mroczis.netmonster.core.model.cell.ICell
 import cz.mroczis.netmonster.core.model.connection.PrimaryConnection
 import jp.tech4u.searchrktncell.data.CellId
 import jp.tech4u.searchrktncell.data.CellInfoViewVO
@@ -845,8 +846,8 @@ class MapsActivity : AppCompatActivity(),
         } else {
             // リリース版
             latlng = LatLng(pLocation.latitude, pLocation.longitude)
-            var netMonster = NetMonsterFactory.get(this)
-            var cellInfoAry = netMonster.getCells()
+            val netMonster = NetMonsterFactory.get(this)
+            val cellInfoAry = netMonster.getCells()
             val activeMnc = Utils.getActiveMnc(cellInfoAry)
             for (cellInfo in cellInfoAry) {
                 // 処理しない条件
