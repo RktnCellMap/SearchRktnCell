@@ -47,13 +47,34 @@ class EciUtilTest {
         Assert.assertEquals("279785-1~5", EciUtil.getEnbLcid(eciAry))
         Assert.assertArrayEquals(longArrayOf(71624961, 71624962, 71624963, 71624964, 71624965), eciAry.toLongArray())
 
+        // 空テスト
+        eciAry = listOf<Long>()
+        Assert.assertEquals("", EciUtil.getEnbLcid(eciAry))
+    }
+
+    // 複数の定義を含むテスト
+    @Test
+    fun getEciFromMemoStd2() {
+        var eciAry: List<Long>
         eciAry = EciUtil.getEciFromMemo("end:279785-1~5<br>279786-1~5")
         Assert.assertEquals("279785-1,2,3,4,5 279786-1,2,3,4,5", EciUtil.getEnbLcid(eciAry))
         Assert.assertArrayEquals(longArrayOf(71624961, 71624962, 71624963, 71624964, 71624965, 71625217, 71625218, 71625219, 71625220, 71625221), eciAry.toLongArray())
 
-        // 空テスト
-        eciAry = listOf<Long>()
-        Assert.assertEquals("", EciUtil.getEnbLcid(eciAry))
+        eciAry = EciUtil.getEciFromMemo("end:279785-1,2,3<br>279785-4,5")
+        Assert.assertEquals("279785-1~5", EciUtil.getEnbLcid(eciAry))
+        Assert.assertArrayEquals(longArrayOf(71624961, 71624962, 71624963, 71624964, 71624965), eciAry.toLongArray())
+
+        eciAry = EciUtil.getEciFromMemo("end:279785-2,3,4<br>279786-5,6")
+        Assert.assertEquals("279785-2,3,4 279786-5,6", EciUtil.getEnbLcid(eciAry))
+        Assert.assertArrayEquals(longArrayOf(71624962, 71624963, 71624964, 71625221, 71625222), eciAry.toLongArray())
+
+        eciAry = EciUtil.getEciFromMemo("end:279785-2,3,4<br>279785-5")
+        //Assert.assertEquals("279785-2,3,4,5", EciUtil.getEnbLcid(eciAry))
+        //Assert.assertArrayEquals(longArrayOf(71624962, 71624963, 71624964, 71624965), eciAry.toLongArray())
+
+        eciAry = EciUtil.getEciFromMemo("end:279785-1,2,3<br>279785-4~6")
+        //Assert.assertEquals("279785-1,2,3,4,5,6", EciUtil.getEnbLcid(eciAry))
+        //Assert.assertArrayEquals(longArrayOf(71624961, 71624962, 71624963, 71624964, 71624965, 71624966), eciAry.toLongArray())
     }
 
     @Test
