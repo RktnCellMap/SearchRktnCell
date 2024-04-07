@@ -291,7 +291,12 @@
             android:defaultValue="3"
             app:showSeekBarValue="true"
             />
-
+    <EditTextPreference
+            app:key="mls44011Url"
+            app:title="MLSデータURL"
+            app:useSimpleSummaryProvider="true"
+            android:defaultValue="https://mls.js2hgw.com/cellmap/mls44011.json.bz2"
+            />
     <Preference
             app:key="version"
             app:title="バージョン"

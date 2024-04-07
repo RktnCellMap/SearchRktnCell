@@ -74,7 +74,6 @@ class MapsActivity : AppCompatActivity(),
 
     companion object {
         private const val MLS_JSON_FILENAME = "mls44011.json.bz2"
-        private const val MLS_JSON_URL = "https://cellmap.rukihena.com/$MLS_JSON_FILENAME"
 
         // 地図表示初期位置
         private const val INITIAL_MAP_LAT = 36.0
@@ -845,6 +844,22 @@ class MapsActivity : AppCompatActivity(),
             }
         } else {
             // リリース版
+
+            // netMonster.getCells() でエラーになるので権限チェック
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.READ_PHONE_STATE
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return
+            }
+
             latlng = LatLng(pLocation.latitude, pLocation.longitude)
             val netMonster = NetMonsterFactory.get(this)
             val cellInfoAry = netMonster.getCells()
@@ -1564,7 +1579,11 @@ class MapsActivity : AppCompatActivity(),
             val cacheFile = File(context.cacheDir, MLS_JSON_FILENAME)
 
             val result = try {
-                app.mlsManager.readMls(MLS_JSON_URL, cacheFile, bReload)
+                val mls44011Url = Utils.getPreferenceString(
+                    "mls44011Url",
+                    "https://mls.js2hgw.com/cellmap/mls44011.json.bz2"
+                )
+                app.mlsManager.readMls(mls44011Url!!, cacheFile, bReload)
                 "OK"
             } catch (e: MyException) {
                 e.message ?: ""
