@@ -473,7 +473,10 @@ class CellInfoView : View {
             else -> cellInfo.pci?.toString() ?: "-"
         }
 
-        val bgColor = getColorByMnc(cellInfo.network?.mcc, cellInfo.network?.mnc)
+        val bgColor = when (cellInfo.band?.downlinkEarfcn) {
+            9345 -> 0   // 0はプラチナバンドの意
+            else -> getColorByMnc(cellInfo.network?.mcc, cellInfo.network?.mnc)
+        }
         val vo = CellInfoViewVO(
             cellInfo.signal.rsrp?.toInt(),
             "eNB-LCID: ${cellInfo.enb}-${cellInfo.cid}",
@@ -523,7 +526,13 @@ class CellInfoView : View {
 
     // 用意されたデータをそのまま反映
     fun drawCellInfoView(vo: CellInfoViewVO) {
-        vo.bgColor?.let { setBackgroundColor(it) }
+        if ( vo.bgColor == 0 ) {
+            // プラチナバンドの場合は透過
+            setBackgroundColor(0)
+        }
+        else {
+            vo.bgColor?.let { setBackgroundColor(it) }
+        }
         cellRsrp = vo.rsrp
         stringL1 = vo.l1
         stringL2 = vo.l2

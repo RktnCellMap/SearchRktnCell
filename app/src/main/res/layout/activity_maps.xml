@@ -5,15 +5,24 @@
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical">
-    <jp.tech4u.searchrktncell.CellInfoView
-            android:background="@color/colorForeign"
+    <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="100dp"
-            android:id="@+id/cellInfoView"
-            app:stringL1="eNB-LCID: -"
-            app:stringL2="PCI: -  BW: -"
-            app:stringR="TA: -"
-    />
+        >
+        <jp.tech4u.searchrktncell.CustomGradientView
+                android:layout_width="match_parent"
+                android:layout_height="100dp"
+                />
+        <jp.tech4u.searchrktncell.CellInfoView
+                android:background="@color/colorForeign"
+                android:layout_width="match_parent"
+                android:layout_height="100dp"
+                android:id="@+id/cellInfoView"
+                app:stringL1="eNB-LCID: -"
+                app:stringL2="PCI: -  BW: -"
+                app:stringR="TA: -"
+                />
+    </RelativeLayout>
     <jp.tech4u.searchrktncell.LcidView
             android:background="@color/colorForeign"
             android:layout_width="match_parent"
