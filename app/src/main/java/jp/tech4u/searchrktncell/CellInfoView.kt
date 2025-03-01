@@ -475,6 +475,8 @@ class CellInfoView : View {
 
         val bgColor = when (cellInfo.band?.downlinkEarfcn) {
             9345 -> 0   // 0はプラチナバンドの意
+            // 5900 -> 0   // KDDI B18 デバッグ用（本番はコメントアウト）
+            // 5925 -> 0   // KDDI B18 デバッグ用（本番はコメントアウト）
             else -> getColorByMnc(cellInfo.network?.mcc, cellInfo.network?.mnc)
         }
         val vo = CellInfoViewVO(

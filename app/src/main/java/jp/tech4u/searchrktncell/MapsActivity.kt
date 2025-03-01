@@ -125,6 +125,7 @@ class MapsActivity : AppCompatActivity(),
     private var dummyCommunicationEpoch = 0L
 
     // UI部品
+    private lateinit var cellInfoViewFrame: FrameLayout
     private lateinit var cellInfoView: CellInfoView
     private lateinit var lcidView: LcidView
     private lateinit var btnGps: ImageButton
@@ -241,6 +242,7 @@ class MapsActivity : AppCompatActivity(),
         instance = this
         setContentView(R.layout.activity_maps)
 
+        cellInfoViewFrame = findViewById(R.id.cellInfoViewFrame)
         cellInfoView = findViewById(R.id.cellInfoView)
         lcidView = findViewById(R.id.lcidView)
         btnGps = findViewById(R.id.btnGps)
@@ -656,7 +658,7 @@ class MapsActivity : AppCompatActivity(),
 
     private fun reCalcCellInfoViewLayout2() {
         val density = resources.displayMetrics.density
-        cellInfoView.layoutParams.height = when {
+        cellInfoViewFrame.layoutParams.height = when {
             cellInfoView.bPortrait -> when {
                 cellInfoView.bLarge -> (140 * density).toInt()
                 else -> (100 * density).toInt()
