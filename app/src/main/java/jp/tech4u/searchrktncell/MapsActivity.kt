@@ -208,8 +208,6 @@ class MapsActivity : AppCompatActivity(),
             }
         }
 
-    private lateinit var darkMapStyle: MapStyleOptions
-
     // 最後に得た現在地（PhoneStateListenerで参照）
     private var lastLocation: Location? = null
     private var lastLocationEpoch = 0L
@@ -289,9 +287,6 @@ class MapsActivity : AppCompatActivity(),
         changeBtnCellFit()
         changeBtnCompass()
         changeHeadingUpMode()
-
-        // ダークテーマのマップスタイルを読み込む（反映はまだ）
-        darkMapStyle = MapStyleOptions.loadRawResourceStyle(this, R.raw.dark_map)
 
         powerConnectionReceiver = PowerConnectionReceiver(applicationContext, window)
         powerConnectionReceiver.setScreenOn()
@@ -387,23 +382,14 @@ class MapsActivity : AppCompatActivity(),
     private fun setTheme() {
         try {
             // アプリ設定を見て判断。アプリ設定がFOLLOW_SYSTEMなら、システム設定を見る。
-            val bDark = when (Utils.getPreferenceString("theme", "MODE_NIGHT_FOLLOW_SYSTEM")) {
-                "MODE_NIGHT_YES" -> true
-                "MODE_NIGHT_NO" -> false
-                else -> {
-                    // システム設定を見る
-                    val configuration = applicationContext.resources.configuration
-                    val currentNightMode = configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-                    currentNightMode == Configuration.UI_MODE_NIGHT_YES
-                }
+            val colorScheme = when (Utils.getPreferenceString("theme", "MODE_NIGHT_FOLLOW_SYSTEM")) {
+                "MODE_NIGHT_YES" -> MapColorScheme.DARK
+                "MODE_NIGHT_NO" -> MapColorScheme.LIGHT
+                else -> MapColorScheme.FOLLOW_SYSTEM
             }
 
-            val style = if (bDark) darkMapStyle else null
-            Log.i(localClassName, "setTheme() $bDark")
-            val success = mMap.setMapStyle(style)
-            if (!success) {
-                Log.e(localClassName, "Style parsing failed.")
-            }
+            Log.i(localClassName, "setMapColorScheme() $colorScheme")
+            mMap.mapColorScheme = colorScheme
 
             // 自動でやって欲しいけど、どうやるのかわからんので手動で変更します。
             txtLatLng.setBackgroundColor(ContextCompat.getColor(this, R.color.colorMapObjBg))
@@ -418,8 +404,10 @@ class MapsActivity : AppCompatActivity(),
         } catch (e: UninitializedPropertyAccessException) {
             // 設定でテーマが指定されていると、起動時にmMapがコレ。
             // 問題ないので握りつぶす。
+            // （MapColorScheme対応から、ここには来ないかも）
         } catch (e: Resources.NotFoundException) {
             Log.e(localClassName, "Can't find style. Error: ", e)
+            // （MapColorScheme対応から、ここには来ないかも）
         }
     }
 

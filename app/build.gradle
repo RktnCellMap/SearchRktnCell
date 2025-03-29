@@ -10,7 +10,7 @@ android {
         minSdkVersion 26
         targetSdkVersion 32
         versionCode 37
-        versionName '1.6.9'
+        versionName '1.7.0'
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,7 +43,7 @@ dependencies {
     implementation 'androidx.core:core-ktx:1.8.0'
     implementation 'androidx.appcompat:appcompat:1.5.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'com.google.android.gms:play-services-maps:18.1.0'
+    implementation 'com.google.android.gms:play-services-maps:19.1.0'
     implementation 'com.google.android.gms:play-services-location:21.0.0'
     implementation 'com.google.maps.android:android-maps-utils:0.5'
     implementation 'com.squareup.okhttp3:okhttp:4.9.1'  //http通信ライブラリ
