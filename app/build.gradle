@@ -1,6 +1,13 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
+// Google Maps の API キーは git に入れず、local.properties の MAPS_API_KEY から読む
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+
 android {
     compileSdkVersion 32
     buildToolsVersion "30.0.3"
@@ -13,6 +20,7 @@ android {
         versionName '1.7.0'
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        resValue "string", "google_maps_key", localProperties.getProperty('MAPS_API_KEY', '')
     }
 
     buildTypes {
