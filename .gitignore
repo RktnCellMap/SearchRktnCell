@@ -1,14 +1,27 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
+# Gradle / ビルド生成物
+.gradle/
+build/
 /captures
 .externalNativeBuild
 .cxx
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# 環境依存の設定 (SDK の場所、API キー)
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# 署名鍵・秘密情報
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+
+# OS
+.DS_Store
+Thumbs.db
