@@ -3,7 +3,7 @@ buildscript {
     ext.kotlin_version = '1.7.10'
     repositories {
         google()
-        jcenter()
+        mavenCentral()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:7.3.0'
@@ -17,7 +17,14 @@ buildscript {
 allprojects {
     repositories {
         google()
-        jcenter()
+        mavenCentral()
+        // mapscaleview は jcenter 終了後 JitPack でのみ配布されている
+        maven {
+            url 'https://jitpack.io'
+            content {
+                includeGroup 'com.github.pengrad'
+            }
+        }
     }
 }
 
