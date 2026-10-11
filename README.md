@@ -23,13 +23,17 @@
 
 1. このリポジトリを clone し、Android Studio で開きます。
 2. Google Cloud で「Maps SDK for Android」を有効にした API キーを用意します。
-3. プロジェクト直下の `local.properties` に、次の行を追加します。
+3. プロジェクト直下に `local.properties` を作り、次の 2 行を書きます（すでにある場合は足りない行を追加します）。
 
    ```properties
+   sdk.dir=C:/Users/ユーザー名/AppData/Local/Android/Sdk
    MAPS_API_KEY=取得したAPIキー
    ```
 
-4. ビルドして実機にインストールします。
+   `sdk.dir` は Android SDK の場所です。Android Studio の Settings → Languages & Frameworks → Android SDK の「Android SDK Location」で確認できます。
+   Windows のパスは、上の例のように区切りを `/` で書きます。
+
+4. Gradle Sync をやり直し、ビルドして実機にインストールします。
 
 `local.properties` は git の管理対象外です。API キーをリポジトリに含めないでください。
 キーを設定しなくてもビルドはできますが、地図は表示されません。
